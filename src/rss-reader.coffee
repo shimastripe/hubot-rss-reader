@@ -14,9 +14,15 @@
 # Author:
 #   Go Takagi <takagi@shimastripe.com>
 
-module.exports = (robot) ->
-  robot.respond /hello/, (res) ->
-    res.reply "hello!"
+FeedSub = require 'feedsub'
 
-  robot.hear /orly/, (res) ->
-    res.send "yarly"
+module.exports = (robot) ->
+	reader = new FeedSub 'http://rss.cnn.com/rss/cnn_latest.rss', {
+		interval: 0.1 # check feed every 10 minutes
+	}
+
+	reader.on 'item', (item) ->
+		console.log('Got item!');
+		console.dir(item);
+
+	reader.start()
