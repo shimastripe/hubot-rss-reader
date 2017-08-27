@@ -13,7 +13,7 @@
     "url": "https://github.com/hubot-scripts/hubot-rss-reader/issues"
   },
   "dependencies": {
-    "feedsub": "^0.4.0"
+    "rss-feed-emitter": "^1.0.7"
   },
   "peerDependencies": {
     "hubot": "2.x"

@@ -14,15 +14,47 @@
 # Author:
 #   Go Takagi <takagi@shimastripe.com>
 
-FeedSub = require 'feedsub'
+RssFeedEmitter = require 'rss-feed-emitter'
+feeder = new RssFeedEmitter()
+readerList = []
+
+feeder.on 'new-item', (item)->
+  console.log(item)
 
 module.exports = (robot) ->
-	reader = new FeedSub 'http://rss.cnn.com/rss/cnn_latest.rss', {
-		interval: 0.1 # check feed every 10 minutes
-	}
+  # init rss-reader
+  robot.brain.once 'loaded', () =>
+    notifyList = robot.brain.get('RSS_LIST') or []
+    notifyList.foreach (val,index,ar)->
+      feeder.add {
+        url: val.url,
+        refresh: 2000
+      }
 
-	reader.on 'item', (item) ->
-		console.log('Got item!');
-		console.dir(item);
+  robot.hear /register (.*)$/, (res) ->
+    robot.logger.debug "Call /feed-register command."
+    notifyList = robot.brain.get('RSS_LIST') or []
+    url = res.match[1]
 
-	reader.start()
+    if notifyList.length is 0
+      notifyList.push {index:1, url:url, type:'default'}
+    else
+      notifyList.push {index:(notifyList.length+1), url:url, type:'default'}
+
+    robot.brain.set 'RSS_LIST', notifyList
+
+    res.send "Register: " + url
+    feeder.add {
+      url: url,
+      refresh: 2000
+    }
+
+  robot.hear /remove (.*)$/, (res) ->
+    notifyList = robot.brain.get('RSS_LIST') or []
+    newList = notifyList.filter (element, index, array)->
+      element.index != Number(res.match[1])
+    robot.brain.set 'RSS_LIST', newList
+
+  robot.hear /list$/, (res) ->
+    notifyList = robot.brain.get('RSS_LIST') or []
+    console.log notifyList
