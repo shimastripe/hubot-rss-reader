@@ -17,44 +17,57 @@
 RssFeedEmitter = require 'rss-feed-emitter'
 feeder = new RssFeedEmitter()
 readerList = []
+notifyList = []
 
-feeder.on 'new-item', (item)->
-  console.log(item)
+feeder.on 'error', (err)->
+	console.log err.message
 
 module.exports = (robot) ->
-  # init rss-reader
-  robot.brain.once 'loaded', () =>
-    notifyList = robot.brain.get('RSS_LIST') or []
-    notifyList.foreach (val,index,ar)->
-      feeder.add {
-        url: val.url,
-        refresh: 2000
-      }
+	# init rss-reader
+	robot.brain.once 'loaded', () =>
+		notifyList = robot.brain.get('RSS_LIST') or []
 
-  robot.hear /register (.*)$/, (res) ->
-    robot.logger.debug "Call /feed-register command."
-    notifyList = robot.brain.get('RSS_LIST') or []
-    url = res.match[1]
+		for item in notifyList
+			feeder.add {
+				url: item.url,
+				refresh: 20
+			}
 
-    if notifyList.length is 0
-      notifyList.push {index:1, url:url, type:'default'}
-    else
-      notifyList.push {index:(notifyList.length+1), url:url, type:'default'}
+	robot.hear /list2 (.*)$/, (res) ->
+		console.log feeder.list()
 
-    robot.brain.set 'RSS_LIST', notifyList
+	feeder.on 'new-item', (item)->
+		console.log item
+		itemTime = Date.parse item.pubDate
+		itemFeed = notifyList[item.meta.link]
+		if (itemTime - itemFeed) > 0
+			console.log itemTime
 
-    res.send "Register: " + url
-    feeder.add {
-      url: url,
-      refresh: 2000
-    }
+	robot.hear /register (.*)$/, (res) ->
+		robot.logger.debug "Call /feed-register command."
+		notifyList = robot.brain.get('RSS_LIST') or []
+		url = res.match[1]
+		createdAt = new Date()
 
-  robot.hear /remove (.*)$/, (res) ->
-    notifyList = robot.brain.get('RSS_LIST') or []
-    newList = notifyList.filter (element, index, array)->
-      element.index != Number(res.match[1])
-    robot.brain.set 'RSS_LIST', newList
+		if notifyList.length is 0
+			notifyList.push {index:1, url:url, type:'default', updatedAt: createdAt}
+		else
+			notifyList.push {index:(notifyList.length+1), url:url, type:'default', lastUpdated: createdAt}
 
-  robot.hear /list$/, (res) ->
-    notifyList = robot.brain.get('RSS_LIST') or []
-    console.log notifyList
+		robot.brain.set 'RSS_LIST', notifyList
+
+		res.send "Register: " + url
+		feeder.add {
+			url: url,
+			refresh: 20
+		}
+
+	robot.hear /remove (.*)$/, (res) ->
+		notifyList = robot.brain.get('RSS_LIST') or []
+		newList = notifyList.filter (element, index, array)->
+			element.index != Number(res.match[1])
+		robot.brain.set 'RSS_LIST', newList
+
+	robot.hear /list$/, (res) ->
+		notifyList = robot.brain.get('RSS_LIST') or []
+		console.log notifyList
