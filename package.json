@@ -13,6 +13,10 @@
     "url": "https://github.com/hubot-scripts/hubot-rss-reader/issues"
   },
   "dependencies": {
+    "coffeescript": "^1.12.7",
+    "feedparser": "^2.2.1",
+    "lodash": "^4.17.4",
+    "moment": "^2.18.1",
     "rss-feed-emitter": "^1.0.7"
   },
   "peerDependencies": {

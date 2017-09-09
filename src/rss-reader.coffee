@@ -14,53 +14,92 @@
 # Author:
 #   Go Takagi <takagi@shimastripe.com>
 
+_ = require 'lodash'
 RssFeedEmitter = require 'rss-feed-emitter'
 feeder = new RssFeedEmitter()
+FeedParser = require 'feedparser'
+request = require 'request'
+moment = require 'moment'
 readerList = []
 notifyList = []
+rssCache = {}
 
-feeder.on 'error', (err)->
-	console.log err.message
+parsePukiwikiDate = (str)->
+	# str = 27 Jul 2017 13:27:07 JST
+	# JST is invalid. should be +0900
+	a = str.split(', ')[1]
+	b = a.split ' '
+
+	switch b[4]
+		when "JST" then b[4] = "+0900"
+
+	moment b.join ' '
 
 module.exports = (robot) ->
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
 		notifyList = robot.brain.get('RSS_LIST') or []
+		rssCache = robot.brain.get('RSS_CACHE') or {}
 
-		for item in notifyList
-			feeder.add {
-				url: item.url,
-				refresh: 20
-			}
+		# for item in notifyList
+			# TODO: itemを再登録
 
-	robot.hear /list2 (.*)$/, (res) ->
-		console.log feeder.list()
+	fetchRSS = (url)->
+		feedparser = new FeedParser
+		newItems = []
+		title = ''
 
-	feeder.on 'new-item', (item)->
-		console.log item
-		itemTime = Date.parse item.pubDate
-		itemFeed = notifyList[item.meta.link]
-		if (itemTime - itemFeed) > 0
-			console.log itemTime
+		feedparser.on 'error', (error)->
+			# always handle errors
+			console.error error
+
+		feedparser.on 'readable', ()->
+			meta = @meta; # **NOTE** the "meta" is always available in the context of the feedparser instance
+			title = meta.title
+
+			while item = @read()
+				d = moment item.pubdate
+				if !d.isValid
+					d = parsePukiwikiDate(item['rss:pubdate']['#'])
+				newItems.push {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
+
+		feedparser.on 'end', ()->
+			oldItems = rssCache[title]
+			rssCache[title] = newItems
+			robot.brain.set 'RSS_CACHE', rssCache
+
+		req = request url
+		req.on 'error', (error) ->
+			console.error error
+		req.on 'response', (res)->
+			if res.statusCode isnt 200
+				@emit 'error', new Error('Bad status code')
+			else
+				@pipe feedparser
 
 	robot.hear /register (.*)$/, (res) ->
 		robot.logger.debug "Call /feed-register command."
+
 		notifyList = robot.brain.get('RSS_LIST') or []
-		url = res.match[1]
+		args = res.match[1].split ' '
+		url = args[0]
 		createdAt = new Date()
 
-		if notifyList.length is 0
-			notifyList.push {index:1, url:url, type:'default', updatedAt: createdAt}
-		else
-			notifyList.push {index:(notifyList.length+1), url:url, type:'default', lastUpdated: createdAt}
+		type = 'default'
+		if args.length > 1
+			type = args[1]
 
-		robot.brain.set 'RSS_LIST', notifyList
+		if notifyList.length is 0
+			notifyList.push {index: 1, url: url, type: type, updatedAt: createdAt}
+		else
+			notifyList.push {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt}
 
 		res.send "Register: " + url
-		feeder.add {
-			url: url,
-			refresh: 20
-		}
+		robot.brain.set 'RSS_LIST', notifyList
+
+		watchItem = setInterval ()->
+			fetchRSS(url)
+		, 1000 * 5
 
 	robot.hear /remove (.*)$/, (res) ->
 		notifyList = robot.brain.get('RSS_LIST') or []
