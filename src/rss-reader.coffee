@@ -36,14 +36,6 @@ parsePukiwikiDate = (str)->
 	moment b.join ' '
 
 module.exports = (robot) ->
-	# init rss-reader
-	robot.brain.once 'loaded', () =>
-		notifyList = robot.brain.get('RSS_LIST') or []
-		rssCache = robot.brain.get('RSS_CACHE') or {}
-
-		# for item in notifyList
-			# TODO: itemを再登録
-
 	fetchRSS = (url)->
 		feedparser = new FeedParser
 		newItems = []
@@ -77,22 +69,30 @@ module.exports = (robot) ->
 			else
 				@pipe feedparser
 
+	# init rss-reader
+	robot.brain.once 'loaded', () =>
+		notifyList = robot.brain.get('RSS_LIST') or []
+		rssCache = robot.brain.get('RSS_CACHE') or {}
+
+		for item in notifyList
+			fetchRSS item.url
+
 	robot.hear /register (.*)$/, (res) ->
 		robot.logger.debug "Call /feed-register command."
 
 		notifyList = robot.brain.get('RSS_LIST') or []
 		args = res.match[1].split ' '
 		url = args[0]
-		createdAt = new Date()
+		createdAt = moment()
 
 		type = 'default'
 		if args.length > 1
 			type = args[1]
 
 		if notifyList.length is 0
-			notifyList.push {index: 1, url: url, type: type, updatedAt: createdAt}
+			notifyList.push {index: 1, url: url, type: type, updatedAt: createdAt.format()}
 		else
-			notifyList.push {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt}
+			notifyList.push {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt.format()}
 
 		res.send "Register: " + url
 		robot.brain.set 'RSS_LIST', notifyList
