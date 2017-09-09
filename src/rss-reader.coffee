@@ -51,9 +51,11 @@ module.exports = (robot) ->
 
 			while item = @read()
 				d = moment item.pubdate
-				if !d.isValid
+				if !d.isValid()
 					d = parsePukiwikiDate(item['rss:pubdate']['#'])
-				newItems.push {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
+				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
+				robot.logger.debug obj
+				newItems.push obj
 
 		feedparser.on 'end', ()->
 			oldItems = rssCache[title]
@@ -89,10 +91,14 @@ module.exports = (robot) ->
 		if args.length > 1
 			type = args[1]
 
+		obj = {}
 		if notifyList.length is 0
-			notifyList.push {index: 1, url: url, type: type, updatedAt: createdAt.format()}
+			obj = {index: 1, url: url, type: type, updatedAt: createdAt.format()}
 		else
-			notifyList.push {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt.format()}
+			obj = {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt.format()}
+
+		robot.logger.debug obj
+		notifyList.push obj
 
 		res.send "Register: " + url
 		robot.brain.set 'RSS_LIST', notifyList
