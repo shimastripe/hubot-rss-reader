@@ -21,7 +21,7 @@ FeedParser = require 'feedparser'
 request = require 'request'
 moment = require 'moment'
 readerList = []
-notifyList = []
+RSSList = []
 rssCache = {}
 
 parsePukiwikiDate = (str)->
@@ -37,6 +37,7 @@ parsePukiwikiDate = (str)->
 
 module.exports = (robot) ->
 	fetchRSS = (url)->
+		robot.logger.debug "Fetch RSS feed: " + url
 		feedparser = new FeedParser
 		newItems = []
 		title = ''
@@ -54,11 +55,12 @@ module.exports = (robot) ->
 				if !d.isValid()
 					d = parsePukiwikiDate(item['rss:pubdate']['#'])
 				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
-				robot.logger.debug obj
+				# robot.logger.debug obj
 				newItems.push obj
 
 		feedparser.on 'end', ()->
 			oldItems = rssCache[title]
+			# console.log oldItems
 			rssCache[title] = newItems
 			robot.brain.set 'RSS_CACHE', rssCache
 
@@ -71,21 +73,20 @@ module.exports = (robot) ->
 			else
 				@pipe feedparser
 
-		feedparser
-
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
-		notifyList = robot.brain.get('RSS_LIST') or []
+		RSSList = robot.brain.get('RSS_LIST') or {}
 		rssCache = robot.brain.get('RSS_CACHE') or {}
 
-		for item in notifyList
-			fp = fetchRSS item.url
-			feedList.push fp
+		_.forEach RSSList, (item, key)->
+			watchItem = setInterval ()->
+				fetchRSS(item.url)
+			, 1000 * 5
+			readerList[item.url] = watchItem
 
 	robot.hear /register (.*)$/, (res) ->
 		robot.logger.debug "Call /feed-register command."
 
-		notifyList = robot.brain.get('RSS_LIST') or []
 		args = res.match[1].split ' '
 		url = args[0]
 		createdAt = moment()
@@ -94,28 +95,35 @@ module.exports = (robot) ->
 		if args.length > 1
 			type = args[1]
 
-		obj = {}
-		if notifyList.length is 0
-			obj = {index: 1, url: url, type: type, updatedAt: createdAt.format()}
-		else
-			obj = {index: (notifyList.length+1), url: url, type: type, lastUpdated: createdAt.format()}
-
+		obj = {id: Number(createdAt.format('x')), type: type}
 		robot.logger.debug obj
-		notifyList.push obj
+		RSSList[url] = obj
 
 		res.send "Register: " + url
-		robot.brain.set 'RSS_LIST', notifyList
+		robot.brain.set 'RSS_LIST', RSSList
 
 		watchItem = setInterval ()->
 			fetchRSS(url)
 		, 1000 * 5
 
+		readerList[url] = watchItem
+
 	robot.hear /remove (.*)$/, (res) ->
-		notifyList = robot.brain.get('RSS_LIST') or []
-		newList = notifyList.filter (element, index, array)->
-			element.index != Number(res.match[1])
-		robot.brain.set 'RSS_LIST', newList
+		id = Number(res.match[1])
+		l = robot.brain.get('RSS_LIST') or {}
+
+		_.forEach l, (value, key)->
+			console.log key
+			if value.id is id
+				# clearInterval readerList[value.key]
+				# readerList = _.omit readerList, [key]
+				#
+				# RSSList = _.omit RSSList, [key]
+				# robot.brain.set 'RSS_LIST', RSSList
+
+				res.send "Delete: " + key
+			else
+				res.send "This id does not exist."
 
 	robot.hear /list$/, (res) ->
-		notifyList = robot.brain.get('RSS_LIST') or []
-		console.log notifyList
+		console.log RSSList
