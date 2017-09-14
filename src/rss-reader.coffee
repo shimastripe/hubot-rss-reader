@@ -71,13 +71,16 @@ module.exports = (robot) ->
 			else
 				@pipe feedparser
 
+		feedparser
+
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
 		notifyList = robot.brain.get('RSS_LIST') or []
 		rssCache = robot.brain.get('RSS_CACHE') or {}
 
 		for item in notifyList
-			fetchRSS item.url
+			fp = fetchRSS item.url
+			feedList.push fp
 
 	robot.hear /register (.*)$/, (res) ->
 		robot.logger.debug "Call /feed-register command."
