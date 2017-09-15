@@ -35,7 +35,7 @@ parsePukiwikiDate = (str)->
 
 	moment b.join ' '
 
-module.exports = (robot) ->
+module.exports = (robot)->
 	fetchRSS = (url)->
 		robot.logger.debug "Fetch RSS feed: " + url
 		feedparser = new FeedParser
@@ -73,9 +73,15 @@ module.exports = (robot) ->
 			else
 				@pipe feedparser
 
+	getRSSList = ()->
+		robot.brain.get('RSS_LIST') or {}
+
+	setRSSList = (rss)->
+		robot.brain.set 'RSS_LIST', rss
+
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
-		RSSList = robot.brain.get('RSS_LIST') or {}
+		RSSList = getRSSList()
 		rssCache = robot.brain.get('RSS_CACHE') or {}
 
 		_.forEach RSSList, (item, key)->
@@ -90,40 +96,39 @@ module.exports = (robot) ->
 		args = res.match[1].split ' '
 		url = args[0]
 		createdAt = moment()
-
 		type = 'default'
 		if args.length > 1
 			type = args[1]
 
 		obj = {id: Number(createdAt.format('x')), type: type}
-		robot.logger.debug obj
+		RSSList = getRSSList()
 		RSSList[url] = obj
 
 		res.send "Register: " + url
-		robot.brain.set 'RSS_LIST', RSSList
-
-		watchItem = setInterval ()->
-			fetchRSS(url)
-		, 1000 * 5
-
-		readerList[url] = watchItem
+		setRSSList RSSList
 
 	robot.hear /remove (.*)$/, (res) ->
 		id = Number(res.match[1])
-		l = robot.brain.get('RSS_LIST') or {}
+		RSSList = getRSSList()
+		hasFlag = false
 
-		_.forEach l, (value, key)->
-			console.log key
+		_.forEach RSSList, (value, key)->
 			if value.id is id
-				# clearInterval readerList[value.key]
-				# readerList = _.omit readerList, [key]
-				#
-				# RSSList = _.omit RSSList, [key]
-				# robot.brain.set 'RSS_LIST', RSSList
-
+				hasFlag = true
+				RSSList = _.omit RSSList, [key]
+				setRSSList RSSList
 				res.send "Delete: " + key
-			else
-				res.send "This id does not exist."
+				false
+			true
+
+		if !hasFlag
+			res.send "This id does not exist."
 
 	robot.hear /list$/, (res) ->
-		console.log RSSList
+		RSSList = getRSSList()
+
+		str = _.reduce RSSList, (result, value, key)->
+			result + "id: " + value.id + "\nurl: " + key + "\ntype: " + value.type + "\n\n"
+		, ''
+
+		res.send str
