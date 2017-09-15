@@ -20,8 +20,7 @@ feeder = new RssFeedEmitter()
 FeedParser = require 'feedparser'
 request = require 'request'
 moment = require 'moment'
-RSSList = []
-CacheItems = {}
+RSSList = {}
 
 parsePukiwikiDate = (str)->
 	# str = 27 Jul 2017 13:27:07 JST
@@ -35,36 +34,13 @@ parsePukiwikiDate = (str)->
 	moment b.join ' '
 
 module.exports = (robot)->
-	fetchRSS = (url)->
+	fetchRSS = (opt, url)->
 		robot.logger.debug "Fetch RSS feed: " + url
-		feedparser = new FeedParser
 		newItems = []
-		title = ''
-
-		feedparser.on 'error', (error)->
-			# always handle errors
-			console.error error
-
-		feedparser.on 'readable', ()->
-			meta = @meta; # **NOTE** the "meta" is always available in the context of the feedparser instance
-			title = meta.title
-
-			while item = @read()
-				d = moment item.pubdate
-				if !d.isValid()
-					d = parsePukiwikiDate(item['rss:pubdate']['#'])
-				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
-				# robot.logger.debug obj
-				newItems.push obj
-
-		feedparser.on 'end', ()->
-			oldItems = CacheItems[title]
-			# console.log oldItems
-			CacheItems[title] = newItems
-			robot.brain.set 'CACHEITEMS', CacheItems
-			console.log newItems
 
 		req = request url
+		feedparser = new FeedParser
+
 		req.on 'error', (error) ->
 			console.error error
 		req.on 'response', (res)->
@@ -73,20 +49,59 @@ module.exports = (robot)->
 			else
 				@pipe feedparser
 
+		feedparser.on 'error', (error)->
+			# always handle errors
+			console.error error
+
+		feedparser.on 'readable', ()->
+			while item = @read()
+				d = moment item.pubdate
+				if !d.isValid()
+					d = parsePukiwikiDate(item['rss:pubdate']['#'])
+
+				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
+				newItems.push obj
+
+		feedparser.on 'end', ()->
+			cache = getCache()
+			oldItems = cache[url]
+
+			if _.isEmpty oldItems
+				cache[url] = newItems
+				setCache cache
+				return
+
+			notifyItems = _.differenceWith newItems, oldItems, _.isEqual
+
+			switch opt.type
+				when "pukiwikidiff"
+					console.log "pukiwikidiff"
+				else
+					_.forEach notifyItems, (value, key)->
+						console.log value
+
+			cache[url] = newItems
+			setCache cache
+
 	getRSSList = ()->
 		robot.brain.get('RSS_LIST') or {}
 
 	setRSSList = (rss)->
 		robot.brain.set 'RSS_LIST', rss
 
+	getCache = ()->
+		robot.brain.get('CACHEITEMS') or {}
+
+	setCache = (rss)->
+		robot.brain.set 'CACHEITEMS', rss
+
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
 		RSSList = getRSSList()
-		CacheItems = robot.brain.get('CACHEITEMS') or {}
 
 		setInterval ()->
-			_.forEach RSSList, (item, key)->
-				fetchRSS key
+			_.forEach RSSList, (opt, key)->
+				fetchRSS opt, key
 		, 1000 * 5
 
 	robot.hear /register (.*)$/, (res) ->
