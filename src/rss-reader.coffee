@@ -20,9 +20,8 @@ feeder = new RssFeedEmitter()
 FeedParser = require 'feedparser'
 request = require 'request'
 moment = require 'moment'
-readerList = []
 RSSList = []
-rssCache = {}
+CacheItems = {}
 
 parsePukiwikiDate = (str)->
 	# str = 27 Jul 2017 13:27:07 JST
@@ -59,10 +58,11 @@ module.exports = (robot)->
 				newItems.push obj
 
 		feedparser.on 'end', ()->
-			oldItems = rssCache[title]
+			oldItems = CacheItems[title]
 			# console.log oldItems
-			rssCache[title] = newItems
-			robot.brain.set 'RSS_CACHE', rssCache
+			CacheItems[title] = newItems
+			robot.brain.set 'CACHEITEMS', CacheItems
+			console.log newItems
 
 		req = request url
 		req.on 'error', (error) ->
@@ -82,13 +82,12 @@ module.exports = (robot)->
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
 		RSSList = getRSSList()
-		rssCache = robot.brain.get('RSS_CACHE') or {}
+		CacheItems = robot.brain.get('CACHEITEMS') or {}
 
-		_.forEach RSSList, (item, key)->
-			watchItem = setInterval ()->
-				fetchRSS(item.url)
-			, 1000 * 5
-			readerList[item.url] = watchItem
+		setInterval ()->
+			_.forEach RSSList, (item, key)->
+				fetchRSS key
+		, 1000 * 5
 
 	robot.hear /register (.*)$/, (res) ->
 		robot.logger.debug "Call /feed-register command."
