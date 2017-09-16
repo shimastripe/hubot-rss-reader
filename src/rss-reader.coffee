@@ -124,6 +124,7 @@ module.exports = (robot)->
 	robot.hear /remove (.*)$/, (res) ->
 		id = Number(res.match[1])
 		RSSList = getRSSList()
+		cache = getCache()
 		hasFlag = false
 
 		_.forEach RSSList, (value, key)->
@@ -131,6 +132,9 @@ module.exports = (robot)->
 				hasFlag = true
 				RSSList = _.omit RSSList, [key]
 				setRSSList RSSList
+				cache = _.omit cache, [key]
+				setCache cache
+
 				res.send "Delete: " + key
 				false
 			true
