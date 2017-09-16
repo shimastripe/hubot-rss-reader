@@ -14,13 +14,19 @@
 # Author:
 #   Go Takagi <takagi@shimastripe.com>
 
+# util
 _ = require 'lodash'
+moment = require 'moment'
+
+# RSS
 RssFeedEmitter = require 'rss-feed-emitter'
 feeder = new RssFeedEmitter()
 FeedParser = require 'feedparser'
 request = require 'request'
-moment = require 'moment'
 RSSList = {}
+
+# scraping lib
+puppeteer = require 'puppeteer'
 
 parsePukiwikiDate = (str)->
 	# str = 27 Jul 2017 13:27:07 JST
@@ -34,6 +40,18 @@ parsePukiwikiDate = (str)->
 	moment b.join ' '
 
 module.exports = (robot)->
+	getRSSList = ()->
+		robot.brain.get('RSS_LIST') or {}
+
+	setRSSList = (rss)->
+		robot.brain.set 'RSS_LIST', rss
+
+	getCache = ()->
+		robot.brain.get('CACHEITEMS') or {}
+
+	setCache = (rss)->
+		robot.brain.set 'CACHEITEMS', rss
+
 	fetchRSS = (opt, url)->
 		robot.logger.debug "Fetch RSS feed: " + url
 		newItems = []
@@ -82,18 +100,6 @@ module.exports = (robot)->
 
 			cache[url] = newItems
 			setCache cache
-
-	getRSSList = ()->
-		robot.brain.get('RSS_LIST') or {}
-
-	setRSSList = (rss)->
-		robot.brain.set 'RSS_LIST', rss
-
-	getCache = ()->
-		robot.brain.get('CACHEITEMS') or {}
-
-	setCache = (rss)->
-		robot.brain.set 'CACHEITEMS', rss
 
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
