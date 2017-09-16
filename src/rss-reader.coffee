@@ -27,6 +27,8 @@ RSSList = {}
 
 # scraping lib
 puppeteer = require 'puppeteer'
+url = require 'url'
+querystring = require 'querystring'
 
 parsePukiwikiDate = (str)->
 	# str = 27 Jul 2017 13:27:07 JST
@@ -38,6 +40,48 @@ parsePukiwikiDate = (str)->
 		when "JST" then b[4] = "+0900"
 
 	moment b.join ' '
+
+parseDiffData = (items)->
+	_.map items, (value, key)->
+		line = ""
+		type = 0
+		switch
+			when _.startsWith value, '<span class="diff_added">'
+				line = value.split('<span class="diff_added">')[1].split('</span>')[0]
+				type = 1
+			when _.startsWith value, '<span class="diff_removed">'
+				line = value.split('<span class="diff_removed">')[1].split('</span>')[0]
+				type = -1
+			else
+				line = value
+		{id:key+1, type:type, line:line}
+
+filterDiffData = (items)->
+	outputIndex = _
+		.chain items
+		.filter (item)->
+			item.type != 0
+		.flatMap (n)->
+			[n.id-1, n.id, n.id+1]
+		.uniq()
+		.value()
+
+	blankItem = _
+		.chain outputIndex
+		.map (n)->
+			if _.includes outputIndex, n+1
+				return {id: -1}
+			return {id: n+1, type: 0, line: "=========="}
+		.filter (n)-> n.id > 0
+		.initial()
+		.value()
+
+	_.chain items
+	.filter (n)->
+		_.includes outputIndex, n.id
+	.union blankItem
+	.orderBy ['id']
+	.value()
 
 module.exports = (robot)->
 	getRSSList = ()->
@@ -59,7 +103,7 @@ module.exports = (robot)->
 		req = request url
 		feedparser = new FeedParser
 
-		req.on 'error', (error) ->
+		req.on 'error', (error)->
 			console.error error
 		req.on 'response', (res)->
 			if res.statusCode isnt 200
@@ -94,12 +138,46 @@ module.exports = (robot)->
 			switch opt.type
 				when "pukiwikidiff"
 					console.log "pukiwikidiff"
+
 				else
 					_.forEach notifyItems, (value, key)->
 						console.log value
 
 			cache[url] = newItems
 			setCache cache
+
+	scrapeDiff = (urlStr)->
+		urlObj = url.parse urlStr
+		target = _.find urlObj.query.split('&'), (o)->
+			!o.includes '='
+		target = querystring.parse "page=" + target
+
+		diffUrlObj = {
+			protocol: urlObj.protocol,
+			hostname: urlObj.hostname,
+			auth: urlObj.auth,
+			pathname: urlObj.pathname,
+			query: {cmd: 'diff', page: target.page}
+		}
+
+		puppeteer.launch()
+		.then (browser)->
+			browser.newPage()
+			.then (page)->
+				page.on 'console', console.log
+				page.goto url.format(diffUrlObj)
+				.then ->
+					page.$eval 'pre', (el) => el.innerHTML
+					.then (dom)->
+						parseDom = parseDiffData dom.split('\n')
+						parseDom = filterDiffData parseDom
+
+						console.log parseDom
+			.then ->
+				browser.close()
+			.catch (err)->
+				console.error err
+				browser.close()
 
 	# init rss-reader
 	robot.brain.once 'loaded', () =>
@@ -110,7 +188,7 @@ module.exports = (robot)->
 				fetchRSS opt, key
 		, 1000 * 5
 
-	robot.hear /register (.*)$/, (res) ->
+	robot.hear /register (.*)$/, (res)->
 		robot.logger.debug "Call /feed-register command."
 
 		args = res.match[1].split ' '
@@ -127,7 +205,7 @@ module.exports = (robot)->
 		res.send "Register: " + url
 		setRSSList RSSList
 
-	robot.hear /remove (.*)$/, (res) ->
+	robot.hear /remove (.*)$/, (res)->
 		id = Number(res.match[1])
 		RSSList = getRSSList()
 		cache = getCache()
@@ -148,7 +226,7 @@ module.exports = (robot)->
 		if !hasFlag
 			res.send "This id does not exist."
 
-	robot.hear /list$/, (res) ->
+	robot.hear /list$/, (res)->
 		RSSList = getRSSList()
 
 		str = _.reduce RSSList, (result, value, key)->
