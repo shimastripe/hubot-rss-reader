@@ -147,29 +147,35 @@ module.exports = (robot)->
 						sourceURL = url.parse feedURL
 						itemLink.auth = sourceURL.auth
 
+						att = {
+							title: value.title
+							title_link: value.link
+							author_name: value.feedName
+							color: '#d3d3d3'
+							fallback: 'feed:' + value.feedName + ", " + value.title
+						}
+
 						scrapeDiff url.format(itemLink)
 						.then (diffItems)->
-							attachments = _.reduce diffItems, (result, value, key)->
-								text = ''
+							attachments = _.reduce diffItems, (result, value, k)->
+								console.log value
 								color = '#d3d3d3'
 								switch value.type
 									when 1
-										text = ':heavy_plus_sign: '
 										color = 'good'
 									when -1
-										text = ':heavy_minus_sign: '
 										color = 'danger'
 
 								attachment = {
 									color: color
-									text: text + value.line
+									text: value.line
 									fallback: 'diff text'
 									mrkdwn_in: ['text']
 								}
 
 								result.push attachment
 								result
-							, []
+							, [att]
 
 							robot.messageRoom channelId, {attachments: attachments}
 
