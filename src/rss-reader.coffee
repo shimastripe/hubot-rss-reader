@@ -138,13 +138,47 @@ module.exports = (robot)->
 
 			switch opt.type
 				when "pukiwikidiff"
-					console.log "pukiwikidiff"
+					_.forEach notifyItems, (value, key)->
+						text = value.description
+						if _.isNull text
+							text = ''
+
+						itemLink = url.parse value.link
+						sourceURL = url.parse url
+						itemLink.auth = sourceURL.auth
+
+						scrapeDiff url.format(itemLink)
+						.then (diffItems)->
+							attachments = _.reduce diffItems, (result, value, key)->
+								text = ''
+								color = '#d3d3d3'
+								switch value.type
+									when 1
+										text = ':heavy_plus_sign: '
+										color = 'good'
+									when -1
+										text = ':heavy_minus_sign: '
+										color = 'danger'
+
+								attachment = {
+									color: color
+									text: text + value.line
+									fallback: 'diff text'
+									mrkdwn_in: ['text']
+								}
+
+								result.push attachment
+								result
+							, []
+
+							robot.messageRoom channelId, {attachments: attachments}
 
 				else
 					_.forEach notifyItems, (value, key)->
 						text = value.description
 						if _.isNull text
 							text = ''
+
 						attachment = {
 							title: value.title
 							title_link: value.link
@@ -184,11 +218,10 @@ module.exports = (robot)->
 					page.$eval 'pre', (el) => el.innerHTML
 					.then (dom)->
 						parseDom = parseDiffData dom.split('\n')
-						parseDom = filterDiffData parseDom
-
-						console.log parseDom
-			.then ->
+						filterDiffData parseDom
+			.then (parseDom) ->
 				browser.close()
+				parseDom
 			.catch (err)->
 				console.error err
 				browser.close()
@@ -282,32 +315,3 @@ module.exports = (robot)->
 		, ''
 
 		res.send str
-
-
-# DEBUG
-	robot.hear /register (.*)$/, (res)->
-		robot.logger.debug "Slash /feed-register."
-
-		args = res.match[1].split ' '
-		url = args[0]
-		createdAt = moment()
-		type = 'default'
-		if args.length > 1
-			type = args[1]
-
-		if !validUrl.isUri url
-			res.send "Invalid URL!"
-			return
-
-		obj = {id: Number(createdAt.format('x')), type: type}
-		RSSList = getRSSList()
-		RSSList[url] = obj
-
-		res.send "Register: " + url
-		setRSSList RSSList
-
-	robot.hear /reset (.*)$/, (res)->
-		robot.brain.set res.match[1], {}
-
-	robot.hear /reset2$/, (res)->
-		robot.brain.set 'CACHEITEMS', {}
