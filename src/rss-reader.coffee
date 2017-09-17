@@ -153,6 +153,8 @@ module.exports = (robot)->
 							mrkdwn_in: ['text']
 						}
 
+						robot.messageRoom channelId, {attachments: [attachment]}
+
 			cache[channelId][url] = newItems
 			setCache cache
 
