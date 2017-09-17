@@ -188,10 +188,17 @@ module.exports = (robot)->
 				fetchRSS opt, key
 		, 1000 * 5
 
-	robot.hear /register (.*)$/, (res)->
+	robot.router.post '/slash/rss/register', (req, res) ->
+		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
+		if req.body.challenge?
+			# Verify
+			challenge = req.body.challenge
+			return res.json challenge: challenge
+
 		robot.logger.debug "Call /feed-register command."
 
-		args = res.match[1].split ' '
+		args = req.body.text.split ' '
+		console.log args
 		url = args[0]
 		createdAt = moment()
 		type = 'default'
