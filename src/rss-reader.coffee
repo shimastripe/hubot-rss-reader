@@ -137,6 +137,7 @@ module.exports = (robot)->
 			notifyItems = _.differenceWith newItems, oldItems, _.isEqual
 
 			console.log oldItems
+			console.log newItems
 			console.log notifyItems
 
 			switch opt.type
