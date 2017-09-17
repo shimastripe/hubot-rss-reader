@@ -188,14 +188,14 @@ module.exports = (robot)->
 				fetchRSS opt, key
 		, 1000 * 5
 
-	robot.router.post '/slash/rss/register', (req, res) ->
+	robot.router.post '/slash/feed/register', (req, res) ->
 		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
 		if req.body.challenge?
 			# Verify
 			challenge = req.body.challenge
 			return res.json challenge: challenge
 
-		robot.logger.debug "Call /feed-register command."
+		robot.logger.debug "Slash /feed-register."
 
 		args = req.body.text.split ' '
 		console.log args
@@ -212,8 +212,15 @@ module.exports = (robot)->
 		res.send "Register: " + url
 		setRSSList RSSList
 
-	robot.hear /remove (.*)$/, (res)->
-		id = Number(res.match[1])
+	robot.router.post '/slash/feed/remove', (req, res) ->
+		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
+		if req.body.challenge?
+			# Verify
+			challenge = req.body.challenge
+			return res.json challenge: challenge
+
+		robot.logger.debug "Slash /feed-remove."
+		id = Number(req.body.text)
 		RSSList = getRSSList()
 		cache = getCache()
 		hasFlag = false
@@ -233,7 +240,14 @@ module.exports = (robot)->
 		if !hasFlag
 			res.send "This id does not exist."
 
-	robot.hear /list$/, (res)->
+	robot.router.post '/slash/feed/list', (req, res) ->
+		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
+		if req.body.challenge?
+			# Verify
+			challenge = req.body.challenge
+			return res.json challenge: challenge
+
+		robot.logger.debug "Slash /feed-list."
 		RSSList = getRSSList()
 
 		str = _.reduce RSSList, (result, value, key)->
