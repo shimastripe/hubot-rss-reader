@@ -208,7 +208,7 @@ module.exports = (robot)->
 			query: {cmd: 'diff', page: target.page}
 		}
 
-		puppeteer.launch()
+		puppeteer.launch({args: ['--no-sandbox', '--disable-setuid-sandbox']})
 		.then (browser)->
 			browser.newPage()
 			.then (page)->
