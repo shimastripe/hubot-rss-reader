@@ -296,3 +296,5 @@ module.exports = (robot)->
 		res.send "Register: " + url
 		setRSSList RSSList
 
+	robot.hear /reset (.*)$/, (res)->
+		robot.brain.set res.match[1], {}
