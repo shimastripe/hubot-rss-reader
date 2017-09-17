@@ -84,6 +84,19 @@ filterDiffData = (items)->
 	.orderBy ['id']
 	.value()
 
+reduceSameTypeDiffData = (items)->
+	_.reduce items, (result, value, k)->
+		if result.length > 0
+			lastItem = result[result.length-1]
+			if lastItem.type is value.type
+				lastItem.line += "\n" + value.line
+				result[result.length-1] = lastItem
+				result
+			else
+				result.push value
+				result
+	, []
+
 module.exports = (robot)->
 	getRSSList = ()->
 		robot.brain.get('RSS_LIST') or {}
@@ -158,7 +171,10 @@ module.exports = (robot)->
 						scrapeDiff url.format(itemLink)
 						.then (diffItems)->
 							attachments = _.reduce diffItems, (result, value, k)->
-								console.log value
+								line = value.line
+								if line is ''
+									line = ' '
+
 								color = '#d3d3d3'
 								switch value.type
 									when 1
@@ -168,7 +184,7 @@ module.exports = (robot)->
 
 								attachment = {
 									color: color
-									text: value.line
+									text: line
 									fallback: 'diff text'
 									mrkdwn_in: ['text']
 								}
@@ -224,7 +240,8 @@ module.exports = (robot)->
 					page.$eval 'pre', (el) => el.innerHTML
 					.then (dom)->
 						parseDom = parseDiffData dom.split('\n')
-						filterDiffData parseDom
+						parseDom = filterDiffData parseDom
+						reduceSameTypeDiffData parseDom
 			.then (parseDom) ->
 				browser.close()
 				parseDom
