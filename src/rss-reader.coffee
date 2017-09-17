@@ -147,7 +147,7 @@ module.exports = (robot)->
 						sourceURL = url.parse feedURL
 						itemLink.auth = sourceURL.auth
 
-						scrapeDiff url.format(itemLink)
+						scrapeDiff(url.format(itemLink))
 						.then (diffItems)->
 							attachments = _.reduce diffItems, (result, value, key)->
 								text = ''
