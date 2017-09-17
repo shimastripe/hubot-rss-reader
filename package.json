@@ -18,7 +18,8 @@
     "lodash": "^4.17.4",
     "moment": "^2.18.1",
     "puppeteer": "^0.10.2",
-    "rss-feed-emitter": "^1.0.7"
+    "rss-feed-emitter": "^1.0.7",
+    "valid-url": "^1.0.9"
   },
   "peerDependencies": {
     "hubot": "2.x"

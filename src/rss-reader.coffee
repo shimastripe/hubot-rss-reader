@@ -23,6 +23,7 @@ RssFeedEmitter = require 'rss-feed-emitter'
 feeder = new RssFeedEmitter()
 FeedParser = require 'feedparser'
 request = require 'request'
+validUrl = require 'valid-url'
 RSSList = {}
 
 # scraping lib
@@ -180,7 +181,7 @@ module.exports = (robot)->
 				browser.close()
 
 	# init rss-reader
-	robot.brain.once 'loaded', () =>
+	robot.brain.once 'save', () =>
 		RSSList = getRSSList()
 
 		setInterval ()->
@@ -198,12 +199,15 @@ module.exports = (robot)->
 		robot.logger.debug "Slash /feed-register."
 
 		args = req.body.text.split ' '
-		console.log args
 		url = args[0]
 		createdAt = moment()
 		type = 'default'
 		if args.length > 1
 			type = args[1]
+
+		if !validUrl.isUri url
+			res.send "Invalid URL!"
+			return
 
 		obj = {id: Number(createdAt.format('x')), type: type}
 		RSSList = getRSSList()
