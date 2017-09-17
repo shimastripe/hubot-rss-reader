@@ -97,7 +97,7 @@ module.exports = (robot)->
 	setCache = (rss)->
 		robot.brain.set 'CACHEITEMS', rss
 
-	fetchRSS = (opt, url)->
+	fetchRSS = (opt, url, channelId)->
 		robot.logger.debug "Fetch RSS feed: " + url
 		newItems = []
 
@@ -122,15 +122,15 @@ module.exports = (robot)->
 				if !d.isValid()
 					d = parsePukiwikiDate(item['rss:pubdate']['#'])
 
-				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format()}
+				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format(), feedName: item.meta.title}
 				newItems.push obj
 
 		feedparser.on 'end', ()->
 			cache = getCache()
-			oldItems = cache[url]
+			oldItems = cache[channelId][url]
 
 			if _.isEmpty oldItems
-				cache[url] = newItems
+				cache[channelId][url] = newItems
 				setCache cache
 				return
 
@@ -142,9 +142,18 @@ module.exports = (robot)->
 
 				else
 					_.forEach notifyItems, (value, key)->
-						console.log value
+						if _.isNull value.description
+							value.description = ''
+						attachment = {
+							title: value.title
+							author_name: value.feedName
+							fallback: 'feed:' + value.feedName + ", " + value.title
+							text: value.description
+							color: '#439FE0'
+							mrkdwn_in: ['text']
+						}
 
-			cache[url] = newItems
+			cache[channelId][url] = newItems
 			setCache cache
 
 	scrapeDiff = (urlStr)->
@@ -185,8 +194,9 @@ module.exports = (robot)->
 		RSSList = getRSSList()
 
 		setInterval ()->
-			_.forEach RSSList, (opt, key)->
-				fetchRSS opt, key
+			_.forEach RSSList, (v, k)->
+				_.forEach v, (opt, key)->
+					fetchRSS opt, key, k
 		, 1000 * 5
 
 	robot.router.post '/slash/feed/register', (req, res) ->
@@ -211,7 +221,7 @@ module.exports = (robot)->
 
 		obj = {id: Number(createdAt.format('x')), type: type}
 		RSSList = getRSSList()
-		RSSList[url] = obj
+		RSSList[req.body.channel_id][url] = obj
 
 		res.send "Register: " + url
 		setRSSList RSSList
@@ -229,12 +239,12 @@ module.exports = (robot)->
 		cache = getCache()
 		hasFlag = false
 
-		_.forEach RSSList, (value, key)->
+		_.forEach RSSList[req.body.channel_id], (value, key)->
 			if value.id is id
 				hasFlag = true
-				RSSList = _.omit RSSList, [key]
+				RSSList[req.body.channel_id] = _.omit RSSList[req.body.channel_id], [key]
 				setRSSList RSSList
-				cache = _.omit cache, [key]
+				cache[req.body.channel_id] = _.omit cache[req.body.channel_id], [key]
 				setCache cache
 
 				res.send "Delete: " + key
@@ -254,7 +264,7 @@ module.exports = (robot)->
 		robot.logger.debug "Slash /feed-list."
 		RSSList = getRSSList()
 
-		str = _.reduce RSSList, (result, value, key)->
+		str = _.reduce RSSList[req.body.channel_id], (result, value, key)->
 			result + "id: " + value.id + "\nurl: " + key + "\ntype: " + value.type + "\n\n"
 		, ''
 
