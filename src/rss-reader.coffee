@@ -213,7 +213,7 @@ module.exports = (robot)->
 			browser.newPage()
 			.then (page)->
 				page.on 'console', console.log
-				page.goto url.format(diffUrlObj)
+				page.goto(url.format(diffUrlObj))
 				.then ->
 					page.$eval 'pre', (el) => el.innerHTML
 					.then (dom)->
