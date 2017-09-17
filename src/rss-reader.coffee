@@ -221,6 +221,9 @@ module.exports = (robot)->
 
 		obj = {id: Number(createdAt.format('x')), type: type}
 		RSSList = getRSSList()
+
+		if !_.has RSS_LIST, req.body.channel_id
+			RSSList[req.body.channel_id] = {}
 		RSSList[req.body.channel_id][url] = obj
 
 		res.send "Register: " + url
