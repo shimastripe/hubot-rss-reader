@@ -225,6 +225,7 @@ module.exports = (robot)->
 
 		if !_.has RSSList, req.body.channel_id
 			RSSList[req.body.channel_id] = {}
+		if !_.has cache, req.body.channel_id
 			cache[req.body.channel_id] = {}
 
 		RSSList[req.body.channel_id][url] = obj
@@ -303,3 +304,6 @@ module.exports = (robot)->
 
 	robot.hear /reset (.*)$/, (res)->
 		robot.brain.set res.match[1], {}
+
+	robot.hear /reset2$/, (res)->
+		robot.brain.set 'CACHEITEMS', {}
