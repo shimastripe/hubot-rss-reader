@@ -147,7 +147,7 @@ module.exports = (robot)->
 						sourceURL = url.parse feedURL
 						itemLink.auth = sourceURL.auth
 
-						scrapeDiff(url.format(itemLink))
+						scrapeDiff url.format(itemLink)
 						.then (diffItems)->
 							attachments = _.reduce diffItems, (result, value, key)->
 								text = ''
@@ -213,7 +213,7 @@ module.exports = (robot)->
 			browser.newPage()
 			.then (page)->
 				page.on 'console', console.log
-				page.goto(url.format(diffUrlObj))
+				page.goto url.format(diffUrlObj)
 				.then ->
 					page.$eval 'pre', (el) => el.innerHTML
 					.then (dom)->
