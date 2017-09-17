@@ -128,7 +128,7 @@ module.exports = (robot)->
 		feedparser.on 'end', ()->
 			cache = getCache()
 			oldItems = cache[channelId][url]
-
+			console.log oldItems
 			if _.isEmpty oldItems
 				cache[channelId][url] = newItems
 				setCache cache
@@ -199,7 +199,7 @@ module.exports = (robot)->
 			_.forEach RSSList, (v, k)->
 				_.forEach v, (opt, key)->
 					fetchRSS opt, key, k
-		, 1000 * 5
+		, 1000 * 30
 
 	robot.router.post '/slash/feed/register', (req, res) ->
 		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
