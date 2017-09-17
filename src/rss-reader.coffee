@@ -91,10 +91,11 @@ reduceSameTypeDiffData = (items)->
 			if lastItem.type is value.type
 				lastItem.line += "\n" + value.line
 				result[result.length-1] = lastItem
-				result
 			else
 				result.push value
-				result
+		else
+			result.push value
+		result
 	, []
 
 module.exports = (robot)->
