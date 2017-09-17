@@ -128,13 +128,16 @@ module.exports = (robot)->
 		feedparser.on 'end', ()->
 			cache = getCache()
 			oldItems = cache[channelId][url]
-			console.log oldItems
+
 			if _.isEmpty oldItems
 				cache[channelId][url] = newItems
 				setCache cache
 				return
 
 			notifyItems = _.differenceWith newItems, oldItems, _.isEqual
+
+			console.log oldItems
+			console.log notifyItems
 
 			switch opt.type
 				when "pukiwikidiff"
