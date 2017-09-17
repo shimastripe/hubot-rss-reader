@@ -222,7 +222,7 @@ module.exports = (robot)->
 		obj = {id: Number(createdAt.format('x')), type: type}
 		RSSList = getRSSList()
 
-		if !_.has RSS_LIST, req.body.channel_id
+		if !_.has RSSList, req.body.channel_id
 			RSSList[req.body.channel_id] = {}
 		RSSList[req.body.channel_id][url] = obj
 
@@ -272,3 +272,27 @@ module.exports = (robot)->
 		, ''
 
 		res.send str
+
+
+# DEBUG
+	robot.hear /register (.*)$/, (res)->
+		robot.logger.debug "Slash /feed-register."
+
+		args = res.match[1].split ' '
+		url = args[0]
+		createdAt = moment()
+		type = 'default'
+		if args.length > 1
+			type = args[1]
+
+		if !validUrl.isUri url
+			res.send "Invalid URL!"
+			return
+
+		obj = {id: Number(createdAt.format('x')), type: type}
+		RSSList = getRSSList()
+		RSSList[url] = obj
+
+		res.send "Register: " + url
+		setRSSList RSSList
+
