@@ -221,13 +221,18 @@ module.exports = (robot)->
 
 		obj = {id: Number(createdAt.format('x')), type: type}
 		RSSList = getRSSList()
+		cache = getCache()
 
 		if !_.has RSSList, req.body.channel_id
 			RSSList[req.body.channel_id] = {}
+			cache[req.body.channel_id] = {}
+
 		RSSList[req.body.channel_id][url] = obj
+		cache[req.body.channel_id][url] = []
+		setRSSList RSSList
+		setCache cache
 
 		res.send "Register: " + url
-		setRSSList RSSList
 
 	robot.router.post '/slash/feed/remove', (req, res) ->
 		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
