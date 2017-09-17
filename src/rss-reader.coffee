@@ -97,11 +97,11 @@ module.exports = (robot)->
 	setCache = (rss)->
 		robot.brain.set 'CACHEITEMS', rss
 
-	fetchRSS = (opt, url, channelId)->
-		robot.logger.debug "Fetch RSS feed: " + url
+	fetchRSS = (opt, feedURL, channelId)->
+		robot.logger.debug "Fetch RSS feed: " + feedURL
 		newItems = []
 
-		req = request url
+		req = request feedURL
 		feedparser = new FeedParser
 
 		req.on 'error', (error)->
@@ -127,10 +127,10 @@ module.exports = (robot)->
 
 		feedparser.on 'end', ()->
 			cache = getCache()
-			oldItems = cache[channelId][url]
+			oldItems = cache[channelId][feedURL]
 
 			if _.isEmpty oldItems
-				cache[channelId][url] = newItems
+				cache[channelId][feedURL] = newItems
 				setCache cache
 				return
 
@@ -144,7 +144,7 @@ module.exports = (robot)->
 							text = ''
 
 						itemLink = url.parse value.link
-						sourceURL = url.parse url
+						sourceURL = url.parse feedURL
 						itemLink.auth = sourceURL.auth
 
 						scrapeDiff url.format(itemLink)
@@ -191,7 +191,7 @@ module.exports = (robot)->
 
 						robot.messageRoom channelId, {attachments: [attachment]}
 
-			cache[channelId][url] = newItems
+			cache[channelId][feedURL] = newItems
 			setCache cache
 
 	scrapeDiff = (urlStr)->
