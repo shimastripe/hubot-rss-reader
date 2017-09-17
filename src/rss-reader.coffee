@@ -72,7 +72,7 @@ filterDiffData = (items)->
 		.map (n)->
 			if _.includes outputIndex, n+1
 				return {id: -1}
-			return {id: n+1, type: 0, line: "=========="}
+			return {id: n+1, type: 0, line: "========================================"}
 		.filter (n)-> n.id > 0
 		.initial()
 		.value()
