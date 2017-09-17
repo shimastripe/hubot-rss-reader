@@ -136,23 +136,21 @@ module.exports = (robot)->
 
 			notifyItems = _.differenceWith newItems, oldItems, _.isEqual
 
-			console.log oldItems
-			console.log newItems
-			console.log notifyItems
-
 			switch opt.type
 				when "pukiwikidiff"
 					console.log "pukiwikidiff"
 
 				else
 					_.forEach notifyItems, (value, key)->
-						if _.isNull value.description
-							value.description = ''
+						text = value.description
+						if _.isNull text
+							text = ''
 						attachment = {
 							title: value.title
+							title_link: value.link
 							author_name: value.feedName
 							fallback: 'feed:' + value.feedName + ", " + value.title
-							text: value.description
+							text: text
 							color: '#439FE0'
 							mrkdwn_in: ['text']
 						}
