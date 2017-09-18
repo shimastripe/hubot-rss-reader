@@ -281,13 +281,13 @@ module.exports = (robot)->
 		robot.logger.debug "Slash /feed-register."
 
 		args = req.body.text.split ' '
-		url = args[0]
+		feedURL = args[0]
 		createdAt = moment()
 		type = 'default'
 		if args.length > 1
 			type = args[1]
 
-		if !validUrl.isUri url
+		if !validUrl.isUri feedURL
 			res.send "Invalid URL!"
 			return
 
@@ -300,12 +300,12 @@ module.exports = (robot)->
 		if !_.has cache, req.body.channel_id
 			cache[req.body.channel_id] = {}
 
-		RSSList[req.body.channel_id][url] = obj
-		cache[req.body.channel_id][url] = []
+		RSSList[req.body.channel_id][feedURL] = obj
+		cache[req.body.channel_id][feedURL] = []
 		setRSSList RSSList
 		setCache cache
 
-		res.send "Register: " + url
+		res.send "Register: " + feedURL
 
 	robot.router.post '/slash/feed/remove', (req, res) ->
 		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
