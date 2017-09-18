@@ -57,6 +57,7 @@ parseDiffData = (items)->
 				line = value
 		{id:key+1, type:type, line:line}
 
+# unuse
 filterDiffData = (items)->
 	outputIndex = _
 		.chain items
@@ -84,6 +85,7 @@ filterDiffData = (items)->
 	.orderBy ['id']
 	.value()
 
+# unuse
 reduceSameTypeDiffData = (items)->
 	_.reduce items, (result, value, k)->
 		if result.length > 0
@@ -136,7 +138,15 @@ module.exports = (robot)->
 				if !d.isValid()
 					d = parsePukiwikiDate(item['rss:pubdate']['#'])
 
-				obj = {title:item.title, description:item.description, link:item.link, pubdate:d.format(), feedName: item.meta.title}
+				obj =
+					title:item.title
+					description:item.description
+					summary:item.summary
+					author:item.author
+					link:item.link
+					pubdate:d.format()
+					feedName: item.meta.title
+
 				newItems.push obj
 
 		feedparser.on 'end', ()->
@@ -157,60 +167,64 @@ module.exports = (robot)->
 						if _.isNull text
 							text = ''
 
+						authorName = value.author_name
+						if _.isNull authorName
+							authorName = ''
+
 						itemLink = url.parse value.link
 						sourceURL = url.parse feedURL
 						itemLink.auth = sourceURL.auth
 
-						att = {
+						att =
+							fallback: 'feed:' + value.feedName + ", " + value.title
+							color: '#66cdaa'
+							author_name: authorName
 							title: value.title
 							title_link: value.link
-							author_name: value.feedName
-							color: '#d3d3d3'
-							fallback: 'feed:' + value.feedName + ", " + value.title
-						}
+							footer: value.feedName
+
+						robot.messageRoom channelId, {attachments: [att]}
 
 						scrapeDiff url.format(itemLink)
 						.then (diffItems)->
-							attachments = _.reduce diffItems, (result, value, k)->
-								line = value.line
-								if line is ''
-									line = ' '
-
-								color = '#d3d3d3'
+							text = _.reduce diffItems, (result, value, key)->
 								switch value.type
 									when 1
-										color = 'good'
+										result += '+ ' + value.line + '\n'
 									when -1
-										color = 'danger'
-
-								attachment = {
-									color: color
-									text: line
-									fallback: 'diff text'
-									mrkdwn_in: ['text']
-								}
-
-								result.push attachment
+										result += '- ' + value.line + '\n'
+									else
+										result += '  ' + value.line + '\n'
 								result
-							, [att]
+							, ''
 
-							robot.messageRoom channelId, {attachments: attachments}
+							options =
+								title: value.title
+								filename: value.feedName
+								content: text
+								filetype: 'diff'
+								channels: channelId
 
+							robot.adapter.client.web.files.upload value.feedName, options
 				else
 					_.forEach notifyItems, (value, key)->
-						text = value.description
+						text = value.summary
 						if _.isNull text
 							text = ''
 
-						attachment = {
+						authorName = value.author
+						if _.isNull authorName
+							authorName = ''
+
+						attachment =
+							fallback: 'feed:' + value.feedName + ", " + value.title
+							color: '#439FE0'
+							author_name: authorName
 							title: value.title
 							title_link: value.link
-							author_name: value.feedName
-							fallback: 'feed:' + value.feedName + ", " + value.title
 							text: text
-							color: '#439FE0'
+							footer: value.feedName
 							mrkdwn_in: ['text']
-						}
 
 						robot.messageRoom channelId, {attachments: [attachment]}
 
@@ -223,13 +237,12 @@ module.exports = (robot)->
 			!o.includes '='
 		target = querystring.parse "page=" + target
 
-		diffUrlObj = {
+		diffUrlObj =
 			protocol: urlObj.protocol,
 			hostname: urlObj.hostname,
 			auth: urlObj.auth,
 			pathname: urlObj.pathname,
 			query: {cmd: 'diff', page: target.page}
-		}
 
 		puppeteer.launch({args: ['--no-sandbox', '--disable-setuid-sandbox']})
 		.then (browser)->
@@ -240,9 +253,7 @@ module.exports = (robot)->
 				.then ->
 					page.$eval 'pre', (el) => el.innerHTML
 					.then (dom)->
-						parseDom = parseDiffData dom.split('\n')
-						parseDom = filterDiffData parseDom
-						reduceSameTypeDiffData parseDom
+						parseDiffData dom.split('\n')
 			.then (parseDom) ->
 				browser.close()
 				parseDom
