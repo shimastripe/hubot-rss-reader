@@ -269,7 +269,7 @@ module.exports = (robot)->
 			_.forEach RSSList, (v, k)->
 				_.forEach v, (opt, key)->
 					fetchRSS opt, key, k
-		, 1000 * 30
+		, 1000 * 60 * 15
 
 	robot.router.post '/slash/feed/register', (req, res) ->
 		return unless req.body.token == process.env.HUBOT_SLACK_TOKEN_VERIFY
