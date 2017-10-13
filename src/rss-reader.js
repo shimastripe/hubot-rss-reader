@@ -156,7 +156,7 @@ module.exports = robot => {
                             footer: value.feedName
                         };
 
-                        let text = await scrapeWiki(url.format(itemLink), channelId);
+                        text = await scrapeWiki(url.format(itemLink), channelId);
 
                         let options = {
                             title: value.title,
