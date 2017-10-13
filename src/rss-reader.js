@@ -325,6 +325,7 @@ module.exports = robot => {
         let cache = getCache();
         let hasFlag = false;
         console.log(id);
+        console.log(req.body.channel_id);
         console.log(RSS_LIST);
 
         _.forEach(RSSList[req.body.channel_id], (value, key) => {
