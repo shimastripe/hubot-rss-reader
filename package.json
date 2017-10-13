@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "coffeescript": "^1.12.7",
+    "diff": "^3.4.0",
     "feedparser": "^2.2.1",
     "lodash": "^4.17.4",
     "moment": "^2.19.1",
