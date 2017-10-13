@@ -156,21 +156,7 @@ module.exports = robot => {
                             footer: value.feedName
                         };
 
-                        let diffItems = await scrapeWiki(url.format(itemLink), channelId);
-                        text = _.reduce(diffItems, (result, value, key) => {
-                            switch (value.type) {
-                                case 1:
-                                    result += '+ ' + value.line + '\n';
-                                    break;
-                                case -1:
-                                    result += '- ' + value.line + '\n';
-                                    break;
-                                default:
-                                    result += '  ' + value.line + '\n';
-                                    break;
-                            }
-                            return result;
-                        }, '');
+                        let text = await scrapeWiki(url.format(itemLink), channelId);
 
                         let options = {
                             title: value.title,
@@ -242,15 +228,13 @@ module.exports = robot => {
 
         let articles = getArticle();
         let oldArticle = "";
-        console.log(articles);
         if (_.has(articles[chId], urlStr)) {
             oldArticle = articles[chId][urlStr];
         }
 
         articles[chId][urlStr] = dom;
         setArticle();
-        console.log(jsdiff.createPatch("", oldArticle, dom, "previous", "now"))
-        return dom;
+        return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
     };
 
     // init rss-reader
