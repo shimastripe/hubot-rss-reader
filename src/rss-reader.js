@@ -249,7 +249,8 @@ module.exports = robot => {
 
         articles[chId][urlStr] = dom;
         setArticle();
-        return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
+        console.log(jsdiff.createPatch("", oldArticle, dom, "previous", "now"))
+        return dom;
     };
 
     // init rss-reader
@@ -305,6 +306,7 @@ module.exports = robot => {
         }
         if (obj.type === "pukiwikidiff" && !_.has(articles, req.body.channel_id)) {
             articles[req.body.channel_id] = {};
+            console.log(articles);
             setArticle(articles);
         }
 
