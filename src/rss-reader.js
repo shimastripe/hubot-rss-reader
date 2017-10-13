@@ -326,6 +326,8 @@ module.exports = robot => {
         let hasFlag = false;
 
         _.forEach(RSSList[req.body.channel_id], (value, key) => {
+            console.log(value);
+            console.log(id);
             if (value.id !== id) {
                 return true;
             }
