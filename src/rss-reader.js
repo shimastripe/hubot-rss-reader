@@ -321,16 +321,11 @@ module.exports = robot => {
         robot.logger.debug("/feed-remove");
 
         let id = Number(req.body.text);
-        let RSS_LIST = getRSSList();
+        let RSSList = getRSSList();
         let cache = getCache();
         let hasFlag = false;
-        console.log(id);
-        console.log(req.body.channel_id);
-        console.log(RSS_LIST);
 
         _.forEach(RSSList[req.body.channel_id], (value, key) => {
-            console.log(value);
-            console.log(id);
             if (value.id !== id) {
                 return true;
             }
