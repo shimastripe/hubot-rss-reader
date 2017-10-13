@@ -304,7 +304,7 @@ module.exports = robot => {
         cache[req.body.channel_id][feedURL] = [];
         setRSSList(RSSList);
         setCache(cache);
-        return res.send("Register: " + feedURL + "\nID: " + obj.id);
+        return res.send("Register: " + feedURL + "\nID: " + obj.id + "\nType: " + obj.type);
     });
 
     robot.router.post('/slash/feed/remove', (req, res) => {
