@@ -240,14 +240,13 @@ module.exports = robot => {
             query: { cmd: 'diff', page: target.page }
         }
 
-        return puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] }).then(async browser => {
-            const page = await browser.newPage();
-            await page.on('console', console.log);
-            await page.goto(url.format(diffUrlObj));
-            const dom = await page.$eval('pre', (el) => el.innerHTML);
-            await browser.close();
-            return parseDiffData(dom.split('\n'));
-        });
+        const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+        await page.on('console', console.log);
+        await page.goto(url.format(diffUrlObj));
+        const dom = await page.$eval('pre', (el) => el.innerHTML);
+        await browser.close();
+        return parseDiffData(dom.split('\n'));
     };
 
     // init rss-reader
