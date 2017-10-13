@@ -29,6 +29,7 @@ let RSSList = {};
 const puppeteer = require('puppeteer');
 const url = require('url');
 const querystring = require('querystring');
+const jsdiff = require("diff");
 
 let parsePukiwikiDate = (str) => {
     // str = 27 Jul 2017 13:27:07 JST
@@ -47,26 +48,8 @@ let parsePukiwikiDate = (str) => {
     return moment(b.join(' '));
 };
 
-let parseDiffData = (items) => {
-    return _.map(items, (value, key) => {
-        let line = "";
-        let type = 0;
-
-        if (_.startsWith(value, '<span class="diff_added">')) {
-            line = value.split('<span class="diff_added">')[1].split('</span>')[0];
-            type = 1;
-        } else if (_.startsWith(value, '<span class="diff_removed">')) {
-            line = value.split('<span class="diff_removed">')[1].split('</span>')[0];
-            type = -1;
-        } else {
-            line = value;
-        }
-
-        return { id: key + 1, type: type, line: line };
-    });
-};
-
 module.exports = robot => {
+    // feed list
     let getRSSList = () => {
         return robot.brain.get('RSS_LIST') || {};
     };
@@ -75,12 +58,22 @@ module.exports = robot => {
         return robot.brain.set('RSS_LIST', rss);
     };
 
+    // previous feed item list(check update item)
     let getCache = () => {
         return robot.brain.get('CACHEITEMS') || {};
     };
 
     let setCache = rss => {
         return robot.brain.set('CACHEITEMS', rss);
+    };
+
+    // feed item data
+    let getArticle = () => {
+        return robot.brain.get('WIKIARTICLE') || {};
+    };
+
+    let setArticle = rss => {
+        return robot.brain.set('WIKIARTICLE', rss);
     };
 
     let fetchRSS = (opt, feedURL, channelId) => {
@@ -163,7 +156,7 @@ module.exports = robot => {
                             footer: value.feedName
                         };
 
-                        let diffItems = await scrapeDiff(url.format(itemLink));
+                        let diffItems = await scrapeWiki(url.format(itemLink), channelId);
                         text = _.reduce(diffItems, (result, value, key) => {
                             switch (value.type) {
                                 case 1:
@@ -225,7 +218,7 @@ module.exports = robot => {
         });
     };
 
-    let scrapeDiff = async (urlStr) => {
+    let scrapeWiki = async (urlStr, chId) => {
         let urlObj = url.parse(urlStr);
         let target = _.find(urlObj.query.split('&'), (o) => {
             return !o.includes('=');
@@ -237,16 +230,26 @@ module.exports = robot => {
             hostname: urlObj.hostname,
             auth: urlObj.auth,
             pathname: urlObj.pathname,
-            query: { cmd: 'diff', page: target.page }
+            query: { cmd: 'edit', page: target.page }
         }
 
         const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
         const page = await browser.newPage();
         await page.on('console', console.log);
         await page.goto(url.format(diffUrlObj));
-        const dom = await page.$eval('pre', (el) => el.innerHTML);
+        const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
         await browser.close();
-        return parseDiffData(dom.split('\n'));
+
+        let articles = getArticle();
+        let oldArticle = "";
+        console.log(articles);
+        if (_.has(articles[chId], urlStr)) {
+            oldArticle = articles[chId][urlStr];
+        }
+
+        articles[chId][urlStr] = dom;
+        setArticle();
+        return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
     };
 
     // init rss-reader
@@ -292,12 +295,17 @@ module.exports = robot => {
         };
         let RSSList = getRSSList();
         let cache = getCache();
+        let articles = getArticle();
 
         if (!_.has(RSSList, req.body.channel_id)) {
             RSSList[req.body.channel_id] = {};
         }
         if (!_.has(cache, req.body.channel_id)) {
             cache[req.body.channel_id] = {};
+        }
+        if (obj.type === "pukiwikidiff" && !_.has(articles, req.body.channel_id)) {
+            articles[req.body.channel_id] = {};
+            setArticle(articles);
         }
 
         RSSList[req.body.channel_id][feedURL] = obj;
@@ -323,6 +331,7 @@ module.exports = robot => {
         let id = Number(req.body.text);
         let RSSList = getRSSList();
         let cache = getCache();
+        let articles = getArticle();
         let hasFlag = false;
 
         _.forEach(RSSList[req.body.channel_id], (value, key) => {
@@ -335,6 +344,10 @@ module.exports = robot => {
             setRSSList(RSSList);
             cache[req.body.channel_id] = _.omit(cache[req.body.channel_id], [key]);
             setCache(cache);
+            if (value.type === "pukiwikidiff") {
+                articles[req.body.channel_id] = {};
+                setArticle(articles);
+            }
             res.send("DELETE: " + key);
             return false;
         });
