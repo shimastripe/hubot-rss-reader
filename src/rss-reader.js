@@ -112,8 +112,6 @@ module.exports = robot => {
                     d = parsePukiwikiDate(item['rss:pubdate']['#']);
                 }
 
-                // d = d.add("h", 9)
-
                 let obj = {
                     title: item.title,
                     description: item.description,
@@ -179,7 +177,7 @@ module.exports = robot => {
                                     break;
                             }
                             return result;
-                        }), '';
+                        }, '');
 
                         let options = {
                             title: value.title,
@@ -263,5 +261,108 @@ module.exports = robot => {
                 });
             });
         }, 1000 * 10);
+    });
+
+    robot.router.post('/slash/feed/register', (req, res) => {
+        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+            return;
+        }
+
+        if (req.body.challenge != null) {
+            let challenge = req.body.challenge;
+            return res.json({
+                challenge: challenge
+            });
+        }
+        robot.logger.debug("/feed-register");
+        let args = req.body.text.split(' ');
+        let feedURL = args[0];
+        let createdAt = moment();
+        let type = 'default';
+        if (args.length > 1) {
+            type = args[1];
+        }
+        if (!validUrl.isUri(feedURL)) {
+            res.send("Invalid URL");
+            return;
+        }
+
+        let obj = {
+            id: Number(createdAt.format('x')),
+            type: type
+        };
+        let RSSList = getRSSList();
+        let cache = getCache();
+
+        if (!_.has(RSSList, req.body.channel_id)) {
+            RSSList[req.body.channel_id] = {};
+        }
+        if (!_.has(cache, req.body.channel_id)) {
+            cache[req.body.channel_id] = {};
+        }
+
+        RSSList[req.body.channel_id][feedURL] = obj;
+        cache[req.body.channel_id][feedURL] = [];
+        setRSSList(RSSList);
+        setCache(cache);
+        return res.send("Register: " + feedURL + "\nID: " + obj.id);
+    });
+
+    robot.router.post('/slash/feed/remove', (req, res) => {
+        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+            return;
+        }
+
+        if (req.body.challenge != null) {
+            let challenge = req.body.challenge;
+            return res.json({
+                challenge: challenge
+            });
+        }
+        robot.logger.debug("/feed-remove");
+
+        let id = Number(req.body.text);
+        let RSS_LIST = getRSSList();
+        let cache = getCache();
+        let hasFlag = false;
+
+        _.forEach(RSSList[req.body.channel_id], (value, key) => {
+            if (value.id !== id) {
+                return true;
+            }
+
+            hasFlag = true;
+            RSSList[req.body.channel_id] = _.omit(RSSList[req.body.channel_id], [key]);
+            setRSSList(RSSList);
+            cache[req.body.channel_id] = _.omit(cache[req.body.channel_id], [key]);
+            setCache(cache);
+            res.send("DELETE: " + key);
+            return false;
+        });
+
+        if (!hasFlag) {
+            return res.send("This id does not exist.");
+        }
+    });
+
+    robot.router.post('/slash/feed/list', (req, res) => {
+        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+            return;
+        }
+
+        if (req.body.challenge != null) {
+            let challenge = req.body.challenge;
+            return res.json({
+                challenge: challenge
+            });
+        }
+
+        robot.logger.debug("/feed-list");
+        let RSSList = getRSSList();
+        let str = _.reduce(RSSList[req.body.channel_id], (result, value, key) => {
+            return result + "id: " + value.id + "\nurl: " + key + "\ntype: " + value.type + "\n\n";
+        }, '');
+
+        return res.send(str);
     });
 };
