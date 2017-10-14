@@ -238,21 +238,6 @@ module.exports = robot => {
         return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
     };
 
-    // init rss-reader
-    robot.brain.once('save', () => {
-        RSSList = getRSSList();
-        articles = getArticle();
-        cache = getCache();
-
-        setInterval(() => {
-            _.forEach(RSSList, (v, k) => {
-                _.forEach(v, (opt, key) => {
-                    fetchRSS(opt, key, k);
-                });
-            });
-        }, 1000 * 10);
-    });
-
     robot.router.post('/slash/feed/register', (req, res) => {
         if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
             return;
@@ -357,5 +342,20 @@ module.exports = robot => {
         }, '');
 
         return res.send(str);
+    });
+
+    // init rss-reader
+    robot.brain.once('save', () => {
+        RSSList = getRSSList();
+        articles = getArticle();
+        cache = getCache();
+
+        setInterval(() => {
+            _.forEach(RSSList, (v, k) => {
+                _.forEach(v, (opt, key) => {
+                    fetchRSS(opt, key, k);
+                });
+            });
+        }, 1000 * 10);
     });
 };
