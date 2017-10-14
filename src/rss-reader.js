@@ -132,13 +132,13 @@ module.exports = robot => {
             let notifyItems = _.differenceWith(newItems, oldItems, _.isEqual);
             let is15minutesStopFlag = false;
             _.forEach(notifyItems, (value, key) => {
-                let itemTime = moment(value.pubdate).add(15, 'minutes');
+                let itemTime = moment(value.pubdate).add(5, 'minutes');
                 if (itemTime > moment()) {
                     is15minutesStopFlag = true;
                 }
             });
 
-            if (is15over) {
+            if (is15minutesStopFlag) {
                 return;
             }
 
