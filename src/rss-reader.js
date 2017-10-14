@@ -24,6 +24,8 @@ const FeedParser = require('feedparser');
 const request = require('request');
 const validUrl = require('valid-url');
 let RSSList = {};
+let articles = {};
+let cache = {};
 
 // scraping lib
 const puppeteer = require('puppeteer');
@@ -119,7 +121,6 @@ module.exports = robot => {
             }
         });
         feedparser.on('end', () => {
-            let cache = getCache();
             let oldItems = cache[channelId][feedURL];
 
             if (_.isEmpty(oldItems)) {
@@ -226,20 +227,22 @@ module.exports = robot => {
         const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
         await browser.close();
 
-        let articles = getArticle();
         let oldArticle = "";
-        if (_.has(articles[chId], urlStr)) {
-            oldArticle = articles[chId][urlStr];
+        let columnName = _.replace(urlObj.query, "%2F", "_");
+        if (_.has(articles[chId], columnName)) {
+            oldArticle = articles[chId][columnName];
         }
 
-        articles[chId][urlStr] = dom;
+        articles[chId][columnName] = dom;
         setArticle();
         return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
     };
 
     // init rss-reader
     robot.brain.once('save', () => {
-        let RSSList = getRSSList();
+        RSSList = getRSSList();
+        articles = getArticle();
+        cache = getCache();
 
         setInterval(() => {
             _.forEach(RSSList, (v, k) => {
@@ -278,9 +281,6 @@ module.exports = robot => {
             id: Number(createdAt.format('x')),
             type: type
         };
-        let RSSList = getRSSList();
-        let cache = getCache();
-        let articles = getArticle();
 
         if (!_.has(RSSList, req.body.channel_id)) {
             RSSList[req.body.channel_id] = {};
@@ -290,7 +290,6 @@ module.exports = robot => {
         }
         if (obj.type === "pukiwikidiff" && !_.has(articles, req.body.channel_id)) {
             articles[req.body.channel_id] = {};
-            console.log(articles);
             setArticle(articles);
         }
 
@@ -315,9 +314,6 @@ module.exports = robot => {
         robot.logger.debug("/feed-remove");
 
         let id = Number(req.body.text);
-        let RSSList = getRSSList();
-        let cache = getCache();
-        let articles = getArticle();
         let hasFlag = false;
 
         _.forEach(RSSList[req.body.channel_id], (value, key) => {
@@ -356,7 +352,6 @@ module.exports = robot => {
         }
 
         robot.logger.debug("/feed-list");
-        let RSSList = getRSSList();
         let str = _.reduce(RSSList[req.body.channel_id], (result, value, key) => {
             return result + "id: " + value.id + "\nurl: " + key + "\ntype: " + value.type + "\n\n";
         }, '');
