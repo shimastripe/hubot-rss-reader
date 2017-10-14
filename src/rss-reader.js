@@ -157,7 +157,7 @@ module.exports = robot => {
                             footer: value.feedName
                         };
 
-                        text = await scrapeWiki(url.format(itemLink), channelId);
+                        text = await scrapeWiki(url.format(itemLink), channelId, value.title);
 
                         let options = {
                             title: value.title,
@@ -205,7 +205,7 @@ module.exports = robot => {
         });
     };
 
-    let scrapeWiki = async (urlStr, chId) => {
+    let scrapeWiki = async (urlStr, chId, title) => {
         let urlObj = url.parse(urlStr);
         let target = _.find(urlObj.query.split('&'), (o) => {
             return !o.includes('=');
@@ -235,7 +235,7 @@ module.exports = robot => {
 
         articles[chId][columnName] = dom;
         setArticle();
-        return jsdiff.diffSentences(oldArticle, dom);
+        return jsdiff.createPatch(title, oldArticle, dom, "old", "new");
     };
 
     robot.router.post('/slash/feed/register', (req, res) => {
