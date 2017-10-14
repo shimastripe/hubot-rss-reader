@@ -235,7 +235,7 @@ module.exports = robot => {
 
         articles[chId][columnName] = dom;
         setArticle();
-        return jsdiff.createPatch("", oldArticle, dom, "previous", "now");
+        return jsdiff.diffSentences(oldArticle, dom);
     };
 
     robot.router.post('/slash/feed/register', (req, res) => {
