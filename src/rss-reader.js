@@ -175,6 +175,7 @@ module.exports = robot => {
 
 			if (_.isEmpty(oldItems)) {
 				cache[feedData.link] = newItems;
+				console.log(cache);
 				setCache(cache);
 
 				// if (feedData.type === "pukiwikidiff") {
