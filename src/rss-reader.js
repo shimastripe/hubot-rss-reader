@@ -34,339 +34,437 @@ const querystring = require('querystring');
 const jsdiff = require("diff");
 
 let parsePukiwikiDate = (str) => {
-    // str = 27 Jul 2017 13:27:07 JST
-    // JST is invalid. should be +0900
-    let a = str.split(', ')[1];
-    let b = a.split(' ');
+	// str = 27 Jul 2017 13:27:07 JST
+	// JST is invalid. should be +0900
+	let a = str.split(', ')[1];
+	let b = a.split(' ');
 
-    switch (b[4]) {
-        case "JST":
-            b[4] = "+0900"
-            break;
+	switch (b[4]) {
+		case "JST":
+			b[4] = "+0900"
+			break;
 
-        default:
-            break;
-    }
-    return moment(b.join(' '));
+		default:
+			break;
+	}
+	return moment(b.join(' '));
+};
+
+let getDiffPageUrlObj = (urlObj) => {
+	let target = _.find(urlObj.query.split('&'), (o) => {
+		return !o.includes('=');
+	});
+	target = querystring.parse("page=" + target);
+
+	return {
+		protocol: urlObj.protocol,
+		hostname: urlObj.hostname,
+		auth: urlObj.auth,
+		pathname: urlObj.pathname,
+		query: {
+			cmd: 'edit',
+			page: target.page
+		}
+	};
+};
+
+let scrapeOnePage = async(urlStr) => {
+	const browser = await puppeteer.launch({
+		args: ['--no-sandbox', '--disable-setuid-sandbox']
+	});
+	const page = await browser.newPage();
+	await page.on('console', console.log);
+	await page.goto(urlStr);
+	const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
+	await browser.close();
+	return dom;
 };
 
 module.exports = robot => {
-    // feed list
-    let getRSSList = () => {
-        return robot.brain.get('RSS_LIST') || {};
-    };
+	// feed list
+	let getRSSList = () => {
+		return robot.brain.get('RSS_LIST') || [];
+	};
 
-    let setRSSList = rss => {
-        return robot.brain.set('RSS_LIST', rss);
-    };
+	let setRSSList = rss => {
+		return robot.brain.set('RSS_LIST', rss);
+	};
 
-    // previous feed item list(check update item)
-    let getCache = () => {
-        return robot.brain.get('CACHEITEMS') || {};
-    };
+	// previous feed item list(check update item)
+	let getCache = () => {
+		return robot.brain.get('CACHEITEMS') || {};
+	};
 
-    let setCache = rss => {
-        return robot.brain.set('CACHEITEMS', rss);
-    };
+	let setCache = rss => {
+		return robot.brain.set('CACHEITEMS', rss);
+	};
 
-    // feed item data
-    let getArticle = () => {
-        return robot.brain.get('WIKIARTICLE') || {};
-    };
+	// feed item data
+	let getArticle = () => {
+		return robot.brain.get('WIKIARTICLE') || {};
+	};
 
-    let setArticle = rss => {
-        return robot.brain.set('WIKIARTICLE', rss);
-    };
+	let setArticle = rss => {
+		return robot.brain.set('WIKIARTICLE', rss);
+	};
 
-    let fetchRSS = (opt, feedURL, channelId) => {
-        robot.logger.debug("Fetch RSS feed: " + feedURL);
-        let newItems = [];
+	let cacheFirstWikiData = async(urlObjArr, chId) => {
+		const browser = await puppeteer.launch({
+			args: ['--no-sandbox', '--disable-setuid-sandbox']
+		});
+		const page = await browser.newPage();
+		await page.on('console', console.log);
 
-        let req = request(feedURL);
-        let feedparser = new FeedParser;
+		_.forEach(urlObjArr, async(value, key) => {
+			let diffUrlObj = getDiffPageUrlObj(value);
+			await page.goto(url.format(diffUrlObj));
+			const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
+			let columnName = _.replace(urlObj.query, "%2F", "_");
+			articles[chId][columnName] = dom;
+		});
 
-        req.on('error', err => {
-            console.error(err);
-        });
-        req.on('response', res => {
-            if (res.statusCode != 200) {
-                req.emit('error', new Error('Bad status code'));
-            } else {
-                req.pipe(feedparser);
-            }
-        });
-        feedparser.on('error', err => {
-            // always handle errors
-            console.error(err);
-        });
-        feedparser.on('readable', () => {
-            let item;
-            while (item = feedparser.read()) {
-                let d = moment(item.pubdate);
-                if (!d.isValid()) {
-                    d = parsePukiwikiDate(item['rss:pubdate']['#']);
-                }
+		await browser.close();
+		setArticle();
+		return;
+	}
 
-                let obj = {
-                    title: item.title,
-                    description: item.description,
-                    summary: item.summary,
-                    author: item.author,
-                    link: item.link,
-                    pubdate: d.format(),
-                    feedName: item.meta.title
-                };
+	let fetchRSS = (feedData) => {
+		robot.logger.debug("Fetch RSS feed: " + feedData.link);
+		let newItems = [];
 
-                newItems.push(obj);
-            }
-        });
-        feedparser.on('end', () => {
-            let oldItems = cache[channelId][feedURL];
+		let req = request(feedData.link);
+		let feedparser = new FeedParser;
 
-            if (_.isEmpty(oldItems)) {
-                cache[channelId][feedURL] = newItems;
-                setCache(cache);
-                return;
-            }
+		req.on('error', err => {
+			console.error(err);
+		});
+		req.on('response', res => {
+			if (res.statusCode != 200) {
+				req.emit('error', new Error('Bad status code'));
+			} else {
+				req.pipe(feedparser);
+			}
+		});
+		feedparser.on('error', err => {
+			// always handle errors
+			console.error(err);
+		});
+		feedparser.on('readable', () => {
+			let item;
+			while (item = feedparser.read()) {
+				let d = moment(item.pubdate);
+				if (!d.isValid()) {
+					d = parsePukiwikiDate(item['rss:pubdate']['#']);
+				}
 
-            let notifyItems = _.differenceWith(newItems, oldItems, _.isEqual);
-            let is15minutesStopFlag = false;
-            _.forEach(notifyItems, (value, key) => {
-                let itemTime = moment(value.pubdate).add(5, 'minutes');
-                if (itemTime > moment()) {
-                    is15minutesStopFlag = true;
-                }
-            });
+				let obj = {
+					title: item.title,
+					description: item.description,
+					summary: item.summary,
+					author: item.author,
+					link: item.link,
+					pubdate: d.format(),
+					feedName: item.meta.title
+				};
 
-            if (is15minutesStopFlag) {
-                return;
-            }
+				newItems.push(obj);
+			}
+		});
+		feedparser.on('end', () => {
+			let oldItems = cache[feedData.link];
 
-            switch (opt.type) {
-                case "pukiwikidiff":
-                    _.forEach(notifyItems, async (value, key) => {
-                        let text = value.description;
-                        if (_.isNull(text)) {
-                            text = '';
-                        }
+			if (_.isEmpty(oldItems)) {
+				cache[feedData.link] = newItems;
+				setCache(cache);
 
-                        let authorName = value.author_name
-                        if (_.isNull(authorName)) {
-                            authorName = '';
-                        }
+				// if (feedData.type === "pukiwikidiff") {
+				// 	cacheFirstWikiData(_.map(newItems, (item) => {
+				// 		return url.parse(item.link);
+				// 	}));
+				// }
+				return;
+			}
 
-                        let itemLink = url.parse(value.link);
-                        let sourceURL = url.parse(feedURL);
-                        itemLink.auth = sourceURL.auth;
+			let notifyItems = _.differenceWith(newItems, oldItems, _.isEqual);
+			// let is10minutesStopFlag = false;
+			// _.forEach(notifyItems, (value, key) => {
+			// 	let itemTime = moment(value.pubdate).add(5, 'minutes');
+			// 	if (itemTime > moment().utcOffset(9) {
+			// 		is10minutesStopFlag = true;
+			// 	}
+			// });
 
-                        let att = {
-                            fallback: 'feed:' + value.feedName + ", " + value.title,
-                            color: '#66cdaa',
-                            author_name: authorName,
-                            title: value.title,
-                            title_link: value.link,
-                            footer: value.feedName
-                        };
+			// if (is10minutesStopFlag) {
+			// 	return;
+			// }
 
-                        text = await scrapeWiki(url.format(itemLink), channelId, value.title);
+			switch (feedData.type) {
+				case "pukiwikidiff":
+					_.forEach(notifyItems, async(value, key) => {
+						let text = value.description;
+						if (_.isNull(text)) {
+							text = '';
+						}
 
-                        let options = {
-                            title: value.title,
-                            filename: value.feedName,
-                            content: text,
-                            filetype: 'diff',
-                            channels: channelId
-                        };
+						let authorName = value.author_name
+						if (_.isNull(authorName)) {
+							authorName = '';
+						}
 
-                        robot.messageRoom(channelId, { attachments: [att] });
-                        robot.adapter.client.web.files.upload(value.feedName, options);
-                    });
-                    break;
+						let itemLink = url.parse(value.link);
+						let sourceURL = url.parse(feedData.link);
+						itemLink.auth = sourceURL.auth;
 
-                default:
-                    _.forEach(notifyItems, (value, key) => {
-                        let text = value.summary;
-                        if (_.isNull(text)) {
-                            text = '';
-                        }
+						let att = {
+							fallback: 'feed:' + value.feedName + ", " + value.title,
+							color: '#66cdaa',
+							author_name: authorName,
+							title: value.title,
+							title_link: value.link,
+							footer: value.feedName
+						};
 
-                        let authorName = value.author;
-                        if (_.isNull(authorName)) {
-                            authorName = '';
-                        }
+						text = await scrapeWiki(url.format(itemLink), value.title);
 
-                        let attachment = {
-                            fallback: 'feed:' + value.feedName + ", " + value.title,
-                            color: '#439FE0',
-                            author_name: authorName,
-                            title: value.title,
-                            title_link: value.link,
-                            text: text,
-                            footer: value.feedName,
-                            mrkdwn_in: ['text']
-                        };
+						_.forEach(feedData.channelIds, (channelId) => {
+							let options = {
+								title: value.title,
+								filename: value.feedName,
+								content: text,
+								filetype: 'diff',
+								channels: channelId
+							};
 
-                        robot.messageRoom(channelId, { attachments: [attachment] });
-                    });
-                    break;
-            }
+							robot.messageRoom(channelId, {
+								attachments: [att]
+							});
+							robot.adapter.client.web.files.upload(value.feedName, options);
+						});
+					});
+					break;
 
-            cache[channelId][feedURL] = newItems;
-            setCache(cache);
-        });
-    };
+				default:
+					_.forEach(notifyItems, (value, key) => {
+						let text = value.summary;
+						if (_.isNull(text)) {
+							text = '';
+						}
 
-    let scrapeWiki = async (urlStr, chId, title) => {
-        let urlObj = url.parse(urlStr);
-        let target = _.find(urlObj.query.split('&'), (o) => {
-            return !o.includes('=');
-        });
-        target = querystring.parse("page=" + target);
+						let authorName = value.author;
+						if (_.isNull(authorName)) {
+							authorName = '';
+						}
 
-        let diffUrlObj = {
-            protocol: urlObj.protocol,
-            hostname: urlObj.hostname,
-            auth: urlObj.auth,
-            pathname: urlObj.pathname,
-            query: { cmd: 'edit', page: target.page }
-        }
+						let attachment = {
+							fallback: 'feed:' + value.feedName + ", " + value.title,
+							color: '#439FE0',
+							author_name: authorName,
+							title: value.title,
+							title_link: value.link,
+							text: text,
+							footer: value.feedName,
+							mrkdwn_in: ['text']
+						};
 
-        const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-        const page = await browser.newPage();
-        await page.on('console', console.log);
-        await page.goto(url.format(diffUrlObj));
-        const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
-        await browser.close();
+						_.forEach(feedData.channelIds, (channelId) => {
+							robot.messageRoom(channelId, {
+								attachments: [attachment]
+							});
+						});
+					});
+					break;
+			}
 
-        let oldArticle = "";
-        let columnName = _.replace(urlObj.query, "%2F", "_");
-        if (_.has(articles[chId], columnName)) {
-            oldArticle = articles[chId][columnName];
-        }
+			cache[feedData.link] = newItems;
+			setCache(cache);
+		});
+	};
 
-        articles[chId][columnName] = dom;
-        setArticle();
-        return jsdiff.createPatch(title, oldArticle, dom, "old", "new");
-    };
+	let scrapeWiki = async(urlStr, title) => {
+		let urlObj = url.parse(urlStr);
+		let diffUrlObj = getDiffPageUrlObj(urlObj);
+		let dom = await scrapeOnePage(url.format(diffUrlObj));
 
-    robot.router.post('/slash/feed/register', (req, res) => {
-        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-            return;
-        }
+		let oldArticle = "";
+		let columnName = _.replace(urlObj.query, "%2F", "_");
+		if (_.has(articles, columnName)) {
+			oldArticle = articles[columnName];
+		}
 
-        if (req.body.challenge != null) {
-            let challenge = req.body.challenge;
-            return res.json({
-                challenge: challenge
-            });
-        }
-        robot.logger.debug("/feed-register");
-        let args = req.body.text.split(' ');
-        let feedURL = args[0];
-        let createdAt = moment();
-        let type = 'default';
-        if (args.length > 1) {
-            type = args[1];
-        }
-        if (!validUrl.isUri(feedURL)) {
-            res.send("Invalid URL");
-            return;
-        }
+		articles[columnName] = dom;
+		setArticle();
+		return jsdiff.createPatch(title, oldArticle, dom, "old", "new");
+	};
 
-        let obj = {
-            id: Number(createdAt.format('x')),
-            type: type
-        };
+	robot.router.post('/slash/feed/register', (req, res) => {
+		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+		// 	res.send("Verify Error");
+		// 	return;
+		// }
 
-        if (!_.has(RSSList, req.body.channel_id)) {
-            RSSList[req.body.channel_id] = {};
-        }
-        if (!_.has(cache, req.body.channel_id)) {
-            cache[req.body.channel_id] = {};
-        }
-        if (obj.type === "pukiwikidiff" && !_.has(articles, req.body.channel_id)) {
-            articles[req.body.channel_id] = {};
-            setArticle(articles);
-        }
+		// if (req.body.challenge != null) {
+		// 	let challenge = req.body.challenge;
+		// 	return res.json({
+		// 		challenge: challenge
+		// 	});
+		// }
+		robot.logger.debug("/feed-register");
+		let channelId = req.body.channel_id;
+		let args = req.body.text.split(' ');
+		let feedURL = args[0];
+		let createdAt = moment().utcOffset(9);
+		let type = 'default';
+		if (args.length > 1) {
+			type = args[1];
+		}
+		if (!validUrl.isUri(feedURL)) {
+			res.send("Invalid URL");
+			return;
+		}
 
-        RSSList[req.body.channel_id][feedURL] = obj;
-        cache[req.body.channel_id][feedURL] = [];
-        setRSSList(RSSList);
-        setCache(cache);
-        return res.send("Register: " + feedURL + "\nID: " + obj.id + "\nType: " + obj.type);
-    });
+		let obj = _.find(RSSList, {
+			link: feedURL,
+			type: type
+		});
 
-    robot.router.post('/slash/feed/remove', (req, res) => {
-        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-            return;
-        }
+		if (_.isUndefined(obj)) {
+			obj = {
+				id: Number(createdAt.format('x')),
+				channelIds: [],
+				link: feedURL,
+				type: type
+			};
+		}
 
-        if (req.body.challenge != null) {
-            let challenge = req.body.challenge;
-            return res.json({
-                challenge: challenge
-            });
-        }
-        robot.logger.debug("/feed-remove");
+		if (!_.includes(obj.channelIds, channelId)) {
+			obj.channelIds.push(channelId);
+		}
 
-        let id = Number(req.body.text);
-        let hasFlag = false;
+		RSSList = _.reject(RSSList, {
+			link: feedURL,
+			type: type
+		});
+		RSSList.push(obj);
+		setRSSList(RSSList);
 
-        _.forEach(RSSList[req.body.channel_id], (value, key) => {
-            if (value.id !== id) {
-                return true;
-            }
+		cache[feedURL] = [];
+		setCache(cache);
+		if (type === "pukiwikidiff") {
+			articles = {};
+			setArticle();
+		}
+		return res.send("Register: " + feedURL + "\nID: " + obj.id + "\nType: " + obj.type);
+	});
 
-            hasFlag = true;
-            RSSList[req.body.channel_id] = _.omit(RSSList[req.body.channel_id], [key]);
-            setRSSList(RSSList);
-            cache[req.body.channel_id] = _.omit(cache[req.body.channel_id], [key]);
-            setCache(cache);
-            if (value.type === "pukiwikidiff") {
-                articles[req.body.channel_id] = {};
-                setArticle(articles);
-            }
-            res.send("DELETE: " + key);
-            return false;
-        });
+	robot.router.post('/slash/feed/remove', (req, res) => {
+		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+		// 	res.send("Verify Error");
+		// 	return;
+		// }
 
-        if (!hasFlag) {
-            return res.send("This id does not exist.");
-        }
-    });
+		// if (req.body.challenge != null) {
+		// 	let challenge = req.body.challenge;
+		// 	return res.json({
+		// 		challenge: challenge
+		// 	});
+		// }
 
-    robot.router.post('/slash/feed/list', (req, res) => {
-        if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-            return;
-        }
+		robot.logger.debug("/feed-remove");
+		let channelId = req.body.channel_id;
+		let id = Number(req.body.text);
+		let obj = _.find(RSSList, {
+			id: id,
+			channelIds: [channelId]
+		});
 
-        if (req.body.challenge != null) {
-            let challenge = req.body.challenge;
-            return res.json({
-                challenge: challenge
-            });
-        }
+		if (_.isUndefined(obj)) {
+			return res.send("This id does not exist.");
+		}
 
-        robot.logger.debug("/feed-list");
-        let str = _.reduce(RSSList[req.body.channel_id], (result, value, key) => {
-            return result + "id: " + value.id + "\nurl: " + key + "\ntype: " + value.type + "\n\n";
-        }, '');
+		RSSList = _.reject(RSSList, {
+			id: id,
+			channelIds: [channelId]
+		});
 
-        return res.send(str);
-    });
+		if (obj.channelIds.length > 1) {
+			_.pull(obj.channelIds, channelId);
+			RSSList.push(obj);
+		}
+		setRSSList(RSSList);
+		cache[obj.link] = [];
+		setCache(cache);
+		if (type === "pukiwikidiff") {
+			articles = {};
+			setArticle();
+		}
+		s
+		return res.send("Delete feed: " + id);
+	});
 
-    // init rss-reader
-    robot.brain.once('save', () => {
-        RSSList = getRSSList();
-        articles = getArticle();
-        cache = getCache();
+	robot.router.post('/slash/feed/list', (req, res) => {
+		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+		// 	res.send("Verify Error");
+		// 	return;
+		// }
 
-        setInterval(() => {
-            _.forEach(RSSList, (v, k) => {
-                _.forEach(v, (opt, key) => {
-                    fetchRSS(opt, key, k);
-                });
-            });
-        }, 1000 * 10);
-    });
+		// if (req.body.challenge != null) {
+		// 	let challenge = req.body.challenge;
+		// 	return res.json({
+		// 		challenge: challenge
+		// 	});
+		// }
+
+		robot.logger.debug("/feed-list");
+		let channelId = req.body.channel_id;
+		let str = _.reduce(RSSList, (result, value, key) => {
+			if (_.includes(value.channelIds, channelId)) {
+				return result + "id: " + value.id + "\nurl: " + value.link + "\ntype: " + value.type + "\n\n";
+			}
+			return result;
+		}, '');
+
+		return res.send(str);
+	});
+
+	// init rss-reader
+	robot.brain.once('save', () => {
+		console.log("OK------------------------")
+		RSSList = getRSSList();
+		articles = getArticle();
+		cache = getCache();
+
+		setInterval(() => {
+			_.forEach(RSSList, (v, k) => {
+				fetchRSS(v);
+			});
+		}, 1000 * 10);
+	});
+
+	//DEBUG
+	robot.hear(/resetrsslist/, (res) => {
+		RSSList = [];
+		setRSSList(RSSList);
+	});
+
+	robot.hear(/checkrsslist/, (res) => {
+		console.log(RSSList);
+	});
+
+	robot.hear(/resetcache/, (res) => {
+		cache = {};
+		setCache(cache);
+	});
+
+	robot.hear(/checkcache/, (res) => {
+		console.log(cache);
+	});
+
+	robot.hear(/resetarticles/, (res) => {
+		articles = {};
+		setArticle(articles);
+	});
+
+	robot.hear(/checkarticles/, (res) => {
+		console.log(articles);
+	});
 };
