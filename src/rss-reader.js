@@ -394,11 +394,11 @@ module.exports = robot => {
 		setRSSList(RSSList);
 		cache[obj.link] = [];
 		setCache(cache);
-		if (type === "pukiwikidiff") {
+		if (obj.type === "pukiwikidiff") {
 			articles = {};
 			setArticle();
 		}
-		s
+
 		return res.send("Delete feed: " + id);
 	});
 
