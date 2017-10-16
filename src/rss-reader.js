@@ -197,18 +197,17 @@ module.exports = robot => {
 			}
 
 			let notifyItems = _.differenceWith(newItems, oldItems, _.isEqual);
-			let is10minutesStopFlag = false;
+			let isMinutesStopFlag = false;
 
 			_.forEach(notifyItems, (value, key) => {
-				let itemTime = moment(value.pubdate).add(5, 'minutes');
-				console.log(itemTime);
-				console.log(moment().utcOffset(9));
+				let itemTime = moment(value.pubdate).add(15, 'minutes');
+
 				if (itemTime > moment().utcOffset(9)) {
-					is10minutesStopFlag = true;
+					isMinutesStopFlag = true;
 				}
 			});
 
-			if (is10minutesStopFlag) {
+			if (isMinutesStopFlag) {
 				return;
 			}
 
@@ -310,17 +309,17 @@ module.exports = robot => {
 	};
 
 	robot.router.post('/slash/feed/register', (req, res) => {
-		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-		// 	res.send("Verify Error");
-		// 	return;
-		// }
+		if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+			res.send("Verify Error");
+			return;
+		}
 
-		// if (req.body.challenge != null) {
-		// 	let challenge = req.body.challenge;
-		// 	return res.json({
-		// 		challenge: challenge
-		// 	});
-		// }
+		if (req.body.challenge != null) {
+			let challenge = req.body.challenge;
+			return res.json({
+				challenge: challenge
+			});
+		}
 		robot.logger.debug("/feed-register");
 		let channelId = req.body.channel_id;
 		let args = req.body.text.split(' ');
@@ -370,17 +369,17 @@ module.exports = robot => {
 	});
 
 	robot.router.post('/slash/feed/remove', (req, res) => {
-		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-		// 	res.send("Verify Error");
-		// 	return;
-		// }
+		if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+			res.send("Verify Error");
+			return;
+		}
 
-		// if (req.body.challenge != null) {
-		// 	let challenge = req.body.challenge;
-		// 	return res.json({
-		// 		challenge: challenge
-		// 	});
-		// }
+		if (req.body.challenge != null) {
+			let challenge = req.body.challenge;
+			return res.json({
+				challenge: challenge
+			});
+		}
 
 		robot.logger.debug("/feed-remove");
 		let channelId = req.body.channel_id;
@@ -415,17 +414,17 @@ module.exports = robot => {
 	});
 
 	robot.router.post('/slash/feed/list', (req, res) => {
-		// if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
-		// 	res.send("Verify Error");
-		// 	return;
-		// }
+		if (req.body.token !== process.env.HUBOT_SLACK_TOKEN_VERIFY) {
+			res.send("Verify Error");
+			return;
+		}
 
-		// if (req.body.challenge != null) {
-		// 	let challenge = req.body.challenge;
-		// 	return res.json({
-		// 		challenge: challenge
-		// 	});
-		// }
+		if (req.body.challenge != null) {
+			let challenge = req.body.challenge;
+			return res.json({
+				challenge: challenge
+			});
+		}
 
 		robot.logger.debug("/feed-list");
 		let channelId = req.body.channel_id;
@@ -441,7 +440,7 @@ module.exports = robot => {
 
 	// init rss-reader
 	robot.brain.once('save', () => {
-		console.log("OK------------------------")
+		robot.logger.debug("DB init");
 		RSSList = getRSSList();
 		articles = getArticle();
 		cache = getCache();
@@ -450,7 +449,7 @@ module.exports = robot => {
 			_.forEach(RSSList, (v, k) => {
 				fetchRSS(v);
 			});
-		}, 1000 * 10);
+		}, 1000 * 60);
 	});
 
 	//DEBUG
