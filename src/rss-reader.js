@@ -108,19 +108,57 @@ module.exports = robot => {
 		return robot.brain.set('WIKIARTICLE', rss);
 	};
 
-	let cacheFirstWikiData = async(urlObjArr, chId) => {
+	let cacheFirstWikiData = async(wikiURLObj) => {
+		let listURLObj = {
+			protocol: wikiURLObj.protocol,
+			hostname: wikiURLObj.hostname,
+			auth: wikiURLObj.auth,
+			pathname: wikiURLObj.pathname,
+			query: {
+				cmd: 'list'
+			}
+		};
+
 		const browser = await puppeteer.launch({
 			args: ['--no-sandbox', '--disable-setuid-sandbox']
 		});
-		const page = await browser.newPage();
-		await page.on('console', console.log);
 
 		try {
-			for (let i = 0; i < urlObjArr.length; i++) {
-				let diffUrlObj = getDiffPageUrlObj(urlObjArr[i]);
-				await page.goto(url.format(diffUrlObj));
-				const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
-				articles[urlObjArr[i].query] = dom;
+			const page = await browser.newPage();
+			await page.on('console', console.log);
+			await page.goto(url.format(listURLObj));
+			const dom = await page.$$eval('div#body>ul>li>ul>li', (els) => {
+				let urls = [];
+				for (let el of els) {
+					if (el.children[1].innerHTML == "(4012d)") {
+						continue;
+					}
+					urls.push(el.children[0].href);
+				}
+				return urls;
+			});
+
+			let cacheUrlObjs = _.map(_.filter(dom, (o) => {
+				return !(_.includes(o, "RecentDeleted"))
+			}), (n) => {
+				let obj = url.parse(n);
+				let target = querystring.parse("page=" + obj.query);
+				return {
+					protocol: obj.protocol,
+					hostname: obj.hostname,
+					auth: obj.auth,
+					pathname: obj.pathname,
+					query: {
+						cmd: 'edit',
+						page: target.page
+					}
+				};
+			});
+
+			for (let cacheUrlObj of cacheUrlObjs) {
+				await page.goto(url.format(cacheUrlObj));
+				const dom2 = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
+				articles[cacheUrlObj.query.page] = dom2;
 			}
 		} catch (err) {
 			console.log(err);
@@ -150,7 +188,6 @@ module.exports = robot => {
 			}
 		});
 		feedparser.on('error', err => {
-			// always handle errors
 			console.error(err);
 		});
 		feedparser.on('readable', () => {
@@ -184,15 +221,6 @@ module.exports = robot => {
 			if (_.isEmpty(oldItems)) {
 				cache[feedData.link] = newItems;
 				setCache(cache);
-
-				if (feedData.type === "pukiwikidiff") {
-					await cacheFirstWikiData(_.map(newItems, (item) => {
-						let feedLinkObj = url.parse(item.link);
-						let srcFeedObj = url.parse(feedData.link);
-						feedLinkObj.auth = srcFeedObj.auth;
-						return feedLinkObj;
-					}));
-				}
 				return;
 			}
 
@@ -303,8 +331,8 @@ module.exports = robot => {
 			oldArticle = articles[urlObj.query];
 		}
 
-		articles[urlObj.query] = dom;
-		setArticle();
+		articles[diffUrlObj.query.page] = dom;
+		setArticle(articles);
 		return jsdiff.createPatch(title, oldArticle, dom, "old", "new");
 	};
 
@@ -361,9 +389,13 @@ module.exports = robot => {
 
 		cache[feedURL] = [];
 		setCache(cache);
+
 		if (type === "pukiwikidiff") {
-			articles = {};
-			setArticle();
+			(async() => {
+				articles = {};
+				await cacheFirstWikiData(url.parse(feedURL));
+				setArticle(articles);
+			})();
 		}
 		return res.send("Register: " + feedURL + "\nID: " + obj.id + "\nType: " + obj.type);
 	});
@@ -407,7 +439,7 @@ module.exports = robot => {
 		setCache(cache);
 		if (obj.type === "pukiwikidiff") {
 			articles = {};
-			setArticle();
+			setArticle(articles);
 		}
 
 		return res.send("Delete feed: " + id);
