@@ -327,8 +327,8 @@ module.exports = robot => {
 		let dom = await scrapeOnePage(url.format(diffUrlObj));
 
 		let oldArticle = "";
-		if (_.has(articles, urlObj.query)) {
-			oldArticle = articles[urlObj.query];
+		if (_.has(articles, diffUrlObj.query.page)) {
+			oldArticle = articles[diffUrlObj.query.page];
 		}
 
 		articles[diffUrlObj.query.page] = dom;
