@@ -115,16 +115,20 @@ module.exports = robot => {
 		const page = await browser.newPage();
 		await page.on('console', console.log);
 
-		_.forEach(urlObjArr, async(value, key) => {
-			let diffUrlObj = getDiffPageUrlObj(value);
-			await page.goto(url.format(diffUrlObj));
-			const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
-			let columnName = _.replace(urlObj.query, "%2F", "_");
-			articles[chId][columnName] = dom;
-		});
+		try {
+			for (let i = 0; i < urlObjArr.length; i++) {
+				let diffUrlObj = getDiffPageUrlObj(urlObjArr[i]);
+				await page.goto(url.format(diffUrlObj));
+				const dom = await page.$eval('textarea[name=msg]', (el) => el.innerHTML);
+				articles[urlObjArr[i].query] = dom;
+			}
+		} catch (err) {
+			console.log(err);
+		} finally {
+			await browser.close();
+		}
 
-		await browser.close();
-		setArticle();
+		setArticle(articles);
 		return;
 	}
 
@@ -152,6 +156,10 @@ module.exports = robot => {
 		feedparser.on('readable', () => {
 			let item;
 			while (item = feedparser.read()) {
+				if (feedData.type === "pukiwikidiff" && item.title === "RecentDeleted") {
+					continue;
+				}
+
 				let d = moment(item.pubdate);
 				if (!d.isValid()) {
 					d = parsePukiwikiDate(item['rss:pubdate']['#']);
@@ -170,34 +178,39 @@ module.exports = robot => {
 				newItems.push(obj);
 			}
 		});
-		feedparser.on('end', () => {
+		feedparser.on('end', async() => {
 			let oldItems = cache[feedData.link];
 
 			if (_.isEmpty(oldItems)) {
 				cache[feedData.link] = newItems;
-				console.log(cache);
 				setCache(cache);
 
-				// if (feedData.type === "pukiwikidiff") {
-				// 	cacheFirstWikiData(_.map(newItems, (item) => {
-				// 		return url.parse(item.link);
-				// 	}));
-				// }
+				if (feedData.type === "pukiwikidiff") {
+					await cacheFirstWikiData(_.map(newItems, (item) => {
+						let feedLinkObj = url.parse(item.link);
+						let srcFeedObj = url.parse(feedData.link);
+						feedLinkObj.auth = srcFeedObj.auth;
+						return feedLinkObj;
+					}));
+				}
 				return;
 			}
 
 			let notifyItems = _.differenceWith(newItems, oldItems, _.isEqual);
-			// let is10minutesStopFlag = false;
-			// _.forEach(notifyItems, (value, key) => {
-			// 	let itemTime = moment(value.pubdate).add(5, 'minutes');
-			// 	if (itemTime > moment().utcOffset(9) {
-			// 		is10minutesStopFlag = true;
-			// 	}
-			// });
+			let is10minutesStopFlag = false;
 
-			// if (is10minutesStopFlag) {
-			// 	return;
-			// }
+			_.forEach(notifyItems, (value, key) => {
+				let itemTime = moment(value.pubdate).add(5, 'minutes');
+				console.log(itemTime);
+				console.log(moment().utcOffset(9));
+				if (itemTime > moment().utcOffset(9)) {
+					is10minutesStopFlag = true;
+				}
+			});
+
+			if (is10minutesStopFlag) {
+				return;
+			}
 
 			switch (feedData.type) {
 				case "pukiwikidiff":
@@ -287,12 +300,11 @@ module.exports = robot => {
 		let dom = await scrapeOnePage(url.format(diffUrlObj));
 
 		let oldArticle = "";
-		let columnName = _.replace(urlObj.query, "%2F", "_");
-		if (_.has(articles, columnName)) {
-			oldArticle = articles[columnName];
+		if (_.has(articles, urlObj.query)) {
+			oldArticle = articles[urlObj.query];
 		}
 
-		articles[columnName] = dom;
+		articles[urlObj.query] = dom;
 		setArticle();
 		return jsdiff.createPatch(title, oldArticle, dom, "old", "new");
 	};
